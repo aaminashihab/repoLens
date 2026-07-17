@@ -36,3 +36,11 @@ class JobService:
         if not job_file.is_file():
             return None
         return json.loads(job_file.read_text(encoding="utf-8"))
+
+    def delete_job_status(self, job_id: str) -> bool:
+        self._validate_job_id(job_id)
+        job_file = self._storage_path / f"{job_id}.json"
+        if not job_file.is_file():
+            return False
+        job_file.unlink(missing_ok=True)
+        return True

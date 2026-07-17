@@ -1,8 +1,9 @@
 import logging
+import os
 from time import perf_counter
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Request
 
 from app.api.dependencies import (
     get_clone_service,
@@ -10,6 +11,8 @@ from app.api.dependencies import (
     get_embedding_service,
     get_index_service,
     get_job_service,
+    require_api_key,
+    limiter,
 )
 from app.models.repository import RepositoryIndexRequest, RepositoryIndexResponse
 from app.services.clone_service import (
@@ -22,8 +25,12 @@ from app.services.embedding_service import EmbeddingService, EmbeddingServiceErr
 from app.services.index_service import IndexService, IndexServiceError
 from app.services.job_service import JobService
 
+INDEX_RATE_LIMIT = os.getenv("INDEX_RATE_LIMIT", "10/hour")
 
-router = APIRouter(tags=["repositories"])
+def get_index_rate_limit() -> str:
+    return INDEX_RATE_LIMIT
+
+router = APIRouter(tags=["repositories"], dependencies=[Depends(require_api_key)])
 logger = logging.getLogger(__name__)
 
 
@@ -52,7 +59,7 @@ def _run_indexing_job(
 
     try:
         embedded_chunks = embedding_service.embed_chunks(chunks)
-        index_service.build_index(index_id, embedded_chunks)
+        index_service.build_index(index_id, embedded_chunks, repo_url=repo_url)
     except (EmbeddingServiceError, IndexServiceError) as exc:
         logger.error(f"Failed to build index: {exc}")
         job_service.update_job_status(index_id, "failed", str(exc))
@@ -77,8 +84,10 @@ def _run_indexing_job(
     status_code=status.HTTP_202_ACCEPTED,
     summary="Start repository indexing",
 )
+@limiter.limit(get_index_rate_limit)
 def index_repository(
-    request: RepositoryIndexRequest,
+    request: Request,
+    index_request: RepositoryIndexRequest,
     background_tasks: BackgroundTasks,
     repository_service: CloneService = Depends(get_clone_service),
     chunk_service: ChunkService = Depends(get_chunk_service),
@@ -88,7 +97,7 @@ def index_repository(
 ) -> RepositoryIndexResponse:
     """Clone a repository, index its Python symbols, and create a job reference."""
     try:
-        CloneService.validate_github_url(str(request.repo_url))
+        CloneService.validate_github_url(str(index_request.repo_url))
     except InvalidRepositoryUrlError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -96,7 +105,7 @@ def index_repository(
     job_service.update_job_status(str(index_id), "processing")
     background_tasks.add_task(
         _run_indexing_job,
-        str(request.repo_url),
+        str(index_request.repo_url),
         str(index_id),
         repository_service,
         chunk_service,
@@ -122,3 +131,33 @@ def get_indexing_status(
     if not status_data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
     return status_data
+
+@router.get(
+    "/indexes",
+    summary="List all indexed repositories",
+    response_model=list[dict],
+)
+def list_repository_indexes(
+    index_service: IndexService = Depends(get_index_service),
+) -> list[dict]:
+    return index_service.list_indexes()
+
+@router.delete(
+    "/index-repository/{index_id}",
+    summary="Delete an indexed repository and its job status",
+)
+def delete_repository_index(
+    index_id: str,
+    index_service: IndexService = Depends(get_index_service),
+    job_service: JobService = Depends(get_job_service),
+) -> dict:
+    try:
+        deleted_index = index_service.delete_index(index_id)
+        job_service.delete_job_status(index_id)
+    except (IndexServiceError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    
+    if not deleted_index:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Index not found")
+        
+    return {"message": "Index and job status deleted successfully"}

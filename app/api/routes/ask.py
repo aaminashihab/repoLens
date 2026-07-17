@@ -1,25 +1,32 @@
 import logging
+import os
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import StreamingResponse
 
-from app.api.dependencies import get_ask_service
+from app.api.dependencies import get_ask_service, require_api_key, limiter
 from app.models.ask import AskRequest, AskResponse, AskSource
 from app.services.ask_service import AskIndexNotFoundError, AskService, AskServiceError
 
+ASK_RATE_LIMIT = os.getenv("ASK_RATE_LIMIT", "30/minute")
 
-router = APIRouter(tags=["ask"])
+def get_ask_rate_limit() -> str:
+    return ASK_RATE_LIMIT
+
+router = APIRouter(tags=["ask"], dependencies=[Depends(require_api_key)])
 logger = logging.getLogger(__name__)
 
 
 @router.post("/ask", response_model=AskResponse, summary="Ask a question about an indexed repository")
+@limiter.limit(get_ask_rate_limit)
 def ask_repository(
-    request: AskRequest,
+    request: Request,
+    ask_request: AskRequest,
     ask_service: AskService = Depends(get_ask_service),
 ) -> AskResponse:
     """Return a Chat Completions answer grounded in indexed repository code."""
     try:
-        result = ask_service.ask(request.index_id, request.question)
+        result = ask_service.ask(ask_request.index_id, ask_request.question)
     except AskIndexNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except AskServiceError as exc:
@@ -41,13 +48,15 @@ def ask_repository(
     "/ask/stream",
     summary="Ask a question and stream the response",
 )
+@limiter.limit(get_ask_rate_limit)
 def ask_question_stream(
-    request: AskRequest,
+    request: Request,
+    ask_request: AskRequest,
     ask_service: AskService = Depends(get_ask_service),
 ) -> StreamingResponse:
     """Stream the answer and its citations using Server-Sent Events (SSE)."""
     return StreamingResponse(
-        ask_service.stream_ask(str(request.index_id), request.question),
+        ask_service.stream_ask(str(ask_request.index_id), ask_request.question),
         media_type="text/event-stream"
     )
 

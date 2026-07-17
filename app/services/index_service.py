@@ -2,7 +2,9 @@
 
 import json
 import logging
+import shutil
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -35,7 +37,7 @@ class IndexService:
     def __init__(self, storage_path: Path = Path("storage/indexes")) -> None:
         self._storage_path = storage_path
 
-    def build_index(self, index_id: str, embedded_chunks: list[EmbeddedChunk]) -> LoadedIndex:
+    def build_index(self, index_id: str, embedded_chunks: list[EmbeddedChunk], repo_url: str = "") -> LoadedIndex:
         """Build and persist a FAISS L2 index under ``storage/indexes/index_id``."""
         self._validate_index_id(index_id)
         faiss = self._faiss()
@@ -56,10 +58,13 @@ class IndexService:
                 index = faiss.IndexFlatL2(1536)
 
             faiss.write_index(index, str(index_path))
+            created_at = datetime.now(timezone.utc).isoformat()
             metadata = {
                 "vector_count": len(embedded_chunks),
                 "dimension": index.d,
                 "chunks": [asdict(item.chunk) for item in embedded_chunks],
+                "repo_url": repo_url,
+                "created_at": created_at,
             }
             temporary_metadata_path = metadata_path.with_suffix(".json.tmp")
             temporary_metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
@@ -100,6 +105,42 @@ class IndexService:
         if index.ntotal != len(chunks):
             raise IndexServiceError(f"Index '{index_id}' has inconsistent vector metadata.")
         return LoadedIndex(index=index, chunks=chunks, index_path=index_path)
+
+    def list_indexes(self) -> list[dict[str, Any]]:
+        """List summaries of all persisted FAISS indexes."""
+        indexes = []
+        if not self._storage_path.is_dir():
+            return []
+            
+        for path in self._storage_path.iterdir():
+            if path.is_dir():
+                metadata_path = path / self._METADATA_FILENAME
+                if metadata_path.is_file():
+                    try:
+                        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+                        chunks = metadata.get("chunks", [])
+                        indexes.append({
+                            "index_id": path.name,
+                            "repo_url": metadata.get("repo_url", ""),
+                            "vector_count": metadata.get("vector_count", 0),
+                            "chunk_count": len(chunks) if isinstance(chunks, list) else 0,
+                            "created_at": metadata.get("created_at", ""),
+                        })
+                    except Exception as exc:
+                        logger.warning(
+                            "Failed to parse metadata file for index directory",
+                            extra={"directory": path.name, "error": str(exc)}
+                        )
+        return indexes
+
+    def delete_index(self, index_id: str) -> bool:
+        """Delete a persisted index by ID."""
+        self._validate_index_id(index_id)
+        index_directory = self._storage_path / index_id
+        if not index_directory.is_dir():
+            return False
+        shutil.rmtree(index_directory, ignore_errors=True)
+        return True
 
     @staticmethod
     def _validate_index_id(index_id: str) -> None:

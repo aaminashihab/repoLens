@@ -16,6 +16,13 @@
                 <h2>RepoLens</h2>
                 <p>AI Codebase Search</p>
             </div>
+
+            <div class="auth-section">
+                <h3>API Key</h3>
+                <div class="input-group">
+                    <input type="password" id="api-key-input" placeholder="X-API-Key (optional)">
+                </div>
+            </div>
             
             <div class="index-section">
                 <h3>Index Repository</h3>
@@ -25,6 +32,13 @@
                 </div>
                 <div id="index-status" class="status-message hidden">
                     <span class="spinner"></span> <span id="status-text">Processing...</span>
+                </div>
+            </div>
+
+            <div class="indexes-section">
+                <h3>Available Indexes</h3>
+                <div id="indexes-list" class="indexes-list">
+                    <div class="index-item-empty">No indexes found.</div>
                 </div>
             </div>
 

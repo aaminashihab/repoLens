@@ -22,6 +22,14 @@ const elements = {
     sendBtn: document.getElementById('send-btn')
 };
 
+function getFetchHeaders(headers = {}) {
+    const key = localStorage.getItem('repolens_api_key');
+    if (key) {
+        headers['X-API-Key'] = key;
+    }
+    return headers;
+}
+
 // --- Indexing Logic ---
 elements.indexBtn.addEventListener('click', async () => {
     const url = elements.repoUrl.value.trim();
@@ -32,7 +40,7 @@ elements.indexBtn.addEventListener('click', async () => {
     try {
         const res = await fetch('/index-repository', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getFetchHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({ repo_url: url })
         });
         
@@ -58,7 +66,9 @@ function setIndexingState(isProcessing, message, isError = false) {
 
 async function pollStatus(indexId, repoUrl) {
     try {
-        const res = await fetch(`/index-repository/${indexId}`);
+        const res = await fetch(`/index-repository/${indexId}`, {
+            headers: getFetchHeaders()
+        });
         const data = await res.json();
         
         if (data.status === 'processing') {
@@ -67,6 +77,7 @@ async function pollStatus(indexId, repoUrl) {
         } else if (data.status === 'completed') {
             setIndexingState(false, 'Indexing complete!');
             setActiveIndex(indexId, repoUrl);
+            loadIndexes();
         } else if (data.status === 'failed') {
             setIndexingState(false, `Failed: ${data.error || 'Unknown error'}`, true);
         }
@@ -84,6 +95,16 @@ function setActiveIndex(indexId, repoUrl) {
     elements.sendBtn.disabled = false;
     
     addMessage('system', `Repository indexed! You can now ask questions about it.`);
+    
+    // Highlight the active item in the list
+    document.querySelectorAll('.index-item').forEach(el => el.classList.remove('active'));
+    const activeItem = Array.from(document.querySelectorAll('.index-item')).find(el => {
+        const repoEl = el.querySelector('.repo-name');
+        return (repoEl && repoEl.title === repoUrl) || el.innerHTML.includes(indexId);
+    });
+    if (activeItem) {
+        activeItem.classList.add('active');
+    }
 }
 
 // --- Chat Logic ---
@@ -141,7 +162,7 @@ function scrollToBottom() {
 async function streamAnswer(indexId, question, contentEl) {
     const response = await fetch('/ask/stream', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getFetchHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ index_id: indexId, question: question })
     });
     
@@ -206,3 +227,105 @@ function appendSources(contentEl, sources) {
     
     contentEl.insertAdjacentHTML('beforeend', DOMPurify.sanitize(containerHtml));
 }
+
+// --- List and Delete Indexes ---
+async function loadIndexes() {
+    const listEl = document.getElementById('indexes-list');
+    if (!listEl) return;
+    try {
+        const res = await fetch('/indexes', {
+            headers: getFetchHeaders()
+        });
+        if (!res.ok) {
+            if (res.status === 401) {
+                listEl.innerHTML = '<div class="index-item-empty" style="color: var(--danger)">Auth required. Enter API Key.</div>';
+            } else {
+                listEl.innerHTML = `<div class="index-item-empty">Failed to load indexes (${res.status})</div>`;
+            }
+            return;
+        }
+        const data = await res.json();
+        if (data.length === 0) {
+            listEl.innerHTML = '<div class="index-item-empty">No indexes found.</div>';
+            return;
+        }
+        
+        listEl.innerHTML = '';
+        data.forEach(idx => {
+            const itemEl = document.createElement('div');
+            itemEl.className = `index-item ${idx.index_id === currentIndexId ? 'active' : ''}`;
+            
+            let repoName = idx.repo_url;
+            if (repoName) {
+                try {
+                    const parts = new URL(repoName).pathname.split('/').filter(p => p);
+                    if (parts.length >= 2) {
+                        repoName = `${parts[parts.length - 2]}/${parts[parts.length - 1]}`;
+                    }
+                } catch (_) {}
+            } else {
+                repoName = 'Unknown Repository';
+            }
+            
+            const createdStr = idx.created_at ? new Date(idx.created_at).toLocaleString() : 'N/A';
+            
+            itemEl.innerHTML = `
+                <div class="details">
+                    <span class="repo-name" title="${idx.repo_url || ''}">${repoName}</span>
+                    <span class="meta-info">${idx.vector_count} chunks • ${createdStr}</span>
+                </div>
+                <button class="btn-delete" title="Delete Index">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                </button>
+            `;
+            
+            itemEl.addEventListener('click', (e) => {
+                if (e.target.closest('.btn-delete')) return;
+                setActiveIndex(idx.index_id, idx.repo_url);
+            });
+            
+            itemEl.querySelector('.btn-delete').addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (!confirm('Are you sure you want to delete this index? This cannot be undone.')) return;
+                try {
+                    const delRes = await fetch(`/index-repository/${idx.index_id}`, {
+                        method: 'DELETE',
+                        headers: getFetchHeaders()
+                    });
+                    if (delRes.ok) {
+                        if (currentIndexId === idx.index_id) {
+                            currentIndexId = null;
+                            elements.currentIndexInfo.className = 'index-info empty';
+                            elements.currentIndexInfo.innerHTML = 'No active index.';
+                            elements.chatInput.disabled = true;
+                            elements.sendBtn.disabled = true;
+                        }
+                        loadIndexes();
+                    } else {
+                        const errData = await delRes.json();
+                        alert('Delete failed: ' + (errData.detail || 'Unknown error'));
+                    }
+                } catch (err) {
+                    alert('Error deleting index: ' + err.message);
+                }
+            });
+            
+            listEl.appendChild(itemEl);
+        });
+    } catch (err) {
+        listEl.innerHTML = `<div class="index-item-empty">Error: ${err.message}</div>`;
+    }
+}
+
+// Initialize API Key configuration and load index list on page load
+document.addEventListener('DOMContentLoaded', () => {
+    const apiKeyInput = document.getElementById('api-key-input');
+    if (apiKeyInput) {
+        apiKeyInput.value = localStorage.getItem('repolens_api_key') || '';
+        apiKeyInput.addEventListener('input', (e) => {
+            localStorage.setItem('repolens_api_key', e.target.value);
+            loadIndexes();
+        });
+    }
+    loadIndexes();
+});
