@@ -11,7 +11,12 @@ class JobService:
 
     @staticmethod
     def _validate_job_id(job_id: str) -> None:
-        if not job_id or Path(job_id).name != job_id or job_id in {".", ".."}:
+        if (
+            not job_id
+            or "/" in job_id
+            or "\\" in job_id
+            or job_id in {".", ".."}
+        ):
             raise ValueError("Job ID must be a single directory or file name without path separators.")
 
     def update_job_status(self, job_id: str, status: str, error: str | None = None) -> None:

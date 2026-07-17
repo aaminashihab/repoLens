@@ -103,7 +103,12 @@ class IndexService:
 
     @staticmethod
     def _validate_index_id(index_id: str) -> None:
-        if not index_id or Path(index_id).name != index_id or index_id in {".", ".."}:
+        if (
+            not index_id
+            or "/" in index_id
+            or "\\" in index_id
+            or index_id in {".", ".."}
+        ):
             raise IndexServiceError("Index ID must be a single directory name.")
 
     @staticmethod
