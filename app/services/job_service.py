@@ -9,7 +9,13 @@ class JobService:
         self._storage_path = storage_path
         self._storage_path.mkdir(parents=True, exist_ok=True)
 
+    @staticmethod
+    def _validate_job_id(job_id: str) -> None:
+        if not job_id or Path(job_id).name != job_id or job_id in {".", ".."}:
+            raise ValueError("Job ID must be a single directory or file name without path separators.")
+
     def update_job_status(self, job_id: str, status: str, error: str | None = None) -> None:
+        self._validate_job_id(job_id)
         job_file = self._storage_path / f"{job_id}.json"
         data: dict[str, Any] = {"status": status}
         if error is not None:
@@ -20,6 +26,7 @@ class JobService:
         temporary_job_file.replace(job_file)
 
     def get_job_status(self, job_id: str) -> dict[str, Any] | None:
+        self._validate_job_id(job_id)
         job_file = self._storage_path / f"{job_id}.json"
         if not job_file.is_file():
             return None

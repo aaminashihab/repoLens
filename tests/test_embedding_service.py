@@ -1,6 +1,9 @@
+import os
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
+
+os.environ["LLM_PROVIDER"] = "openai"
 
 from app.services.chunk_service import CodeChunk
 from app.services.embedding_service import EmbeddingService, EmbeddingServiceError

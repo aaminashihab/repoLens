@@ -128,7 +128,7 @@ function addMessage(role, text) {
     if (role === 'user' || role === 'system') {
         el.querySelector('.message-content').textContent = text;
     } else {
-        el.querySelector('.message-content').innerHTML = marked.parse(text);
+        el.querySelector('.message-content').innerHTML = DOMPurify.sanitize(marked.parse(text));
     }
     elements.chatHistory.appendChild(el);
     scrollToBottom();
@@ -172,7 +172,7 @@ async function streamAnswer(indexId, question, contentEl) {
                 
                 if (eventName === 'token') {
                     markdownContent += eventData.text;
-                    contentEl.innerHTML = marked.parse(markdownContent);
+                    contentEl.innerHTML = DOMPurify.sanitize(marked.parse(markdownContent));
                     scrollToBottom();
                 } else if (eventName === 'error') {
                     throw new Error(eventData.message);
@@ -188,12 +188,14 @@ async function streamAnswer(indexId, question, contentEl) {
 function appendSources(contentEl, sources) {
     if (!sources || sources.length === 0) return;
     
-    const sourcesHtml = sources.map(s => 
-        `<div class="source-item">
-            <span class="file">${s.file_path}</span>
-            <span class="symbol">${s.symbol_name}</span>
-        </div>`
-    ).join('');
+    const sourcesHtml = sources.map(s => {
+        const cleanFilePath = DOMPurify.sanitize(s.file_path);
+        const cleanSymbolName = DOMPurify.sanitize(s.symbol_name);
+        return `<div class="source-item">
+            <span class="file">${cleanFilePath}</span>
+            <span class="symbol">${cleanSymbolName}</span>
+        </div>`;
+    }).join('');
     
     const containerHtml = `
         <div class="sources-container">
@@ -202,5 +204,5 @@ function appendSources(contentEl, sources) {
         </div>
     `;
     
-    contentEl.insertAdjacentHTML('beforeend', containerHtml);
+    contentEl.insertAdjacentHTML('beforeend', DOMPurify.sanitize(containerHtml));
 }

@@ -115,7 +115,10 @@ def get_indexing_status(
     index_id: str,
     job_service: JobService = Depends(get_job_service),
 ) -> dict:
-    status_data = job_service.get_job_status(index_id)
+    try:
+        status_data = job_service.get_job_status(index_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     if not status_data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
     return status_data

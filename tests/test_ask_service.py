@@ -1,6 +1,9 @@
+import os
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
+
+os.environ["LLM_PROVIDER"] = "openai"
 
 from app.services.ask_service import AskIndexNotFoundError, AskService, AskServiceError
 from app.services.retrieval_service import IndexNotFoundError, RetrievedChunk
