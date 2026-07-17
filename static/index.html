@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RepoLens</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/atom-one-dark.min.css">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar glass">
+            <div class="sidebar-header">
+                <h2>RepoLens</h2>
+                <p>AI Codebase Search</p>
+            </div>
+            
+            <div class="index-section">
+                <h3>Index Repository</h3>
+                <div class="input-group">
+                    <input type="text" id="repo-url" placeholder="https://github.com/fastapi/fastapi">
+                    <button id="index-btn" class="btn-primary">Index</button>
+                </div>
+                <div id="index-status" class="status-message hidden">
+                    <span class="spinner"></span> <span id="status-text">Processing...</span>
+                </div>
+            </div>
+
+            <div class="history-section">
+                <h3>Current Index</h3>
+                <div id="current-index-info" class="index-info empty">
+                    No active index.
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="chat-area glass">
+            <div class="chat-history" id="chat-history">
+                <!-- Welcome Message -->
+                <div class="message system">
+                    <div class="message-content">
+                        <p>Welcome to RepoLens. Please index a repository to get started.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="chat-input-container">
+                <form id="chat-form">
+                    <input type="text" id="chat-input" placeholder="Ask a question about the codebase..." disabled>
+                    <button type="submit" id="send-btn" disabled>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                    </button>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+    <script src="/static/app.js"></script>
+</body>
+</html>

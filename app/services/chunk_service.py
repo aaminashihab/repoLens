@@ -34,7 +34,7 @@ class CodeChunk:
 
 
 class ChunkService:
-    """Extract and retain Python symbol chunks from cloned repositories."""
+    """Extract Python symbol chunks from cloned repositories."""
 
     _EXCLUDED_DIRECTORIES = {
         ".git",
@@ -46,16 +46,10 @@ class ChunkService:
         "pycache",
         "__pycache__",
     }
+    _MAX_PYTHON_FILES = 5000
 
     def __init__(self) -> None:
-        language = Language(tree_sitter_python.language())
-        self._parser = Parser(language)
-        self._chunks: list[CodeChunk] = []
-
-    @property
-    def chunks(self) -> tuple[CodeChunk, ...]:
-        """Return all chunks retained in memory so far."""
-        return tuple(self._chunks)
+        self._language = Language(tree_sitter_python.language())
 
     def index_repository(self, repository_path: Path) -> list[CodeChunk]:
         """Parse every Python file below ``repository_path`` and store its chunks."""
@@ -66,6 +60,11 @@ class ChunkService:
 
         started_at = perf_counter()
         python_files = self._find_python_files(repository_path)
+        if len(python_files) > self._MAX_PYTHON_FILES:
+            raise RepositoryChunkError(
+                f"Repository is too large: {len(python_files)} Python files found (max {self._MAX_PYTHON_FILES})."
+            )
+
         indexed_chunks: list[CodeChunk] = []
 
         for file_path in python_files:
@@ -75,12 +74,12 @@ class ChunkService:
                 raise RepositoryChunkError(f"Unable to read Python file: {file_path}") from exc
 
             relative_path = file_path.relative_to(repository_path).as_posix()
-            tree = self._parser.parse(source)
+            parser = Parser(self._language)
+            tree = parser.parse(source)
             indexed_chunks.extend(
                 self._extract_chunks(tree.root_node, source, relative_path)
             )
 
-        self._chunks.extend(indexed_chunks)
         processing_time_seconds = perf_counter() - started_at
         logger.info(
             "Repository scan completed",
@@ -92,10 +91,6 @@ class ChunkService:
             },
         )
         return indexed_chunks
-
-    def clear_chunks(self) -> None:
-        """Clear the in-memory chunk store."""
-        self._chunks.clear()
 
     @classmethod
     def _find_python_files(cls, repository_path: Path) -> list[Path]:

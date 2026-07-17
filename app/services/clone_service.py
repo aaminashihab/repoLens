@@ -1,5 +1,7 @@
 """GitHub repository cloning utilities."""
 
+from collections.abc import Generator
+from contextlib import contextmanager
 import logging
 import re
 import shutil
@@ -34,7 +36,7 @@ class CloneService:
         Its caller is responsible for removing the parent temporary directory
         after repository processing has completed.
         """
-        normalized_url = self._validate_github_url(repo_url)
+        normalized_url = self.validate_github_url(repo_url)
         logger.info("Cloning GitHub repository", extra={"repo_url": normalized_url})
         working_directory: Path | None = None
         try:
@@ -59,8 +61,19 @@ class CloneService:
         )
         return repository_path
 
+    @contextmanager
+    def clone_repository_context(self, repo_url: str) -> Generator[Path, None, None]:
+        """Clone a GitHub repository and yield its local working-tree path,
+        ensuring cleanup of the parent temporary directory upon exit.
+        """
+        repository_path = self.clone_repository(repo_url)
+        try:
+            yield repository_path
+        finally:
+            shutil.rmtree(repository_path.parent, ignore_errors=True)
+
     @classmethod
-    def _validate_github_url(cls, repo_url: str) -> str:
+    def validate_github_url(cls, repo_url: str) -> str:
         """Validate and normalize a GitHub HTTPS repository URL."""
         if not isinstance(repo_url, str):
             raise InvalidRepositoryUrlError("Repository URL must be a string.")
