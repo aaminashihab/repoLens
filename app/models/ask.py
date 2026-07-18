@@ -1,4 +1,12 @@
-from pydantic import BaseModel, Field
+from typing import Literal
+from pydantic import BaseModel, Field, model_validator
+
+
+class ChatTurn(BaseModel):
+    """A single turn in the conversation history."""
+
+    role: Literal["user", "assistant"]
+    content: str = Field(..., min_length=1)
 
 
 class AskRequest(BaseModel):
@@ -6,6 +14,13 @@ class AskRequest(BaseModel):
 
     index_id: str = Field(..., min_length=1, description="Repository index identifier.")
     question: str = Field(..., min_length=1, description="Natural-language repository question.")
+    history: list[ChatTurn] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def truncate_history(self) -> "AskRequest":
+        if len(self.history) > 12:
+            self.history = self.history[-12:]
+        return self
 
 
 class AskSource(BaseModel):

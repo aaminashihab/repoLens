@@ -26,7 +26,11 @@ def ask_repository(
 ) -> AskResponse:
     """Return a Chat Completions answer grounded in indexed repository code."""
     try:
-        result = ask_service.ask(ask_request.index_id, ask_request.question)
+        result = ask_service.ask(
+            ask_request.index_id,
+            ask_request.question,
+            history=[turn.model_dump() for turn in ask_request.history],
+        )
     except AskIndexNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except AskServiceError as exc:
@@ -56,7 +60,11 @@ def ask_question_stream(
 ) -> StreamingResponse:
     """Stream the answer and its citations using Server-Sent Events (SSE)."""
     return StreamingResponse(
-        ask_service.stream_ask(str(ask_request.index_id), ask_request.question),
+        ask_service.stream_ask(
+            str(ask_request.index_id),
+            ask_request.question,
+            history=[turn.model_dump() for turn in ask_request.history],
+        ),
         media_type="text/event-stream"
     )
 

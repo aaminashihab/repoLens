@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, ANY
 
 # pyrefly: ignore [missing-import]
 from fastapi import HTTPException
@@ -175,3 +175,174 @@ class RepoLensFeaturesTests(unittest.TestCase):
         with self.assertRaises(HTTPException) as ctx:
             delete_repository_index(index_id="../invalid", index_service=mock_idx_srv, job_service=mock_job_srv)
         self.assertEqual(ctx.exception.status_code, 400)
+
+    # --- New Feature 1 Tests ---
+
+    def test_delete_expired_indexes_unit(self) -> None:
+        from datetime import datetime, timezone, timedelta
+        # Create expired and active index folders
+        expired_dir = Path(self.temp_dir) / "expired-idx"
+        expired_dir.mkdir(parents=True, exist_ok=True)
+        (expired_dir / "index.faiss").write_text("fake", encoding="utf-8")
+        (expired_dir / "metadata.json").write_text(json.dumps({
+            "created_at": (datetime.now(timezone.utc) - timedelta(hours=5)).isoformat(),
+            "repo_url": "https://github.com/owner/expired",
+            "vector_count": 0,
+            "chunks": []
+        }), encoding="utf-8")
+
+        active_dir = Path(self.temp_dir) / "active-idx"
+        active_dir.mkdir(parents=True, exist_ok=True)
+        (active_dir / "index.faiss").write_text("fake", encoding="utf-8")
+        (active_dir / "metadata.json").write_text(json.dumps({
+            "created_at": (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(),
+            "repo_url": "https://github.com/owner/active",
+            "vector_count": 0,
+            "chunks": []
+        }), encoding="utf-8")
+
+        invalid_dir = Path(self.temp_dir) / "invalid-idx"
+        invalid_dir.mkdir(parents=True, exist_ok=True)
+        (invalid_dir / "metadata.json").write_text("not-a-json", encoding="utf-8")
+
+        deleted = self.index_service.delete_expired_indexes(ttl_hours=3.0)
+        self.assertEqual(deleted, ["expired-idx"])
+        self.assertFalse(expired_dir.exists())
+        self.assertTrue(active_dir.exists())
+        self.assertTrue(invalid_dir.exists())
+
+    def test_post_indexes_cleanup_route(self) -> None:
+        api_deps.API_KEY = None
+        mock_idx_srv = Mock()
+        mock_idx_srv.delete_expired_indexes.return_value = ["deleted-1", "deleted-2"]
+        mock_job_srv = Mock()
+
+        fastapi_app.dependency_overrides[api_deps.get_index_service] = lambda: mock_idx_srv
+        fastapi_app.dependency_overrides[api_deps.get_job_service] = lambda: mock_job_srv
+
+        res = self.client.post("/indexes/cleanup")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json(), {"deleted": ["deleted-1", "deleted-2"]})
+        mock_idx_srv.delete_expired_indexes.assert_called_once()
+        self.assertEqual(mock_job_srv.delete_job_status.call_count, 2)
+
+    # --- New Feature 2 Tests ---
+
+    @patch("app.services.clone_service.Repo.clone_from")
+    def test_private_repository_cloning(self, mock_clone_from) -> None:
+        from app.services.clone_service import CloneService
+        service = CloneService()
+
+        # (a) Token passed is used but never logged
+        with patch("app.services.clone_service.logger") as mock_logger:
+            with patch.dict(os.environ, {"GITHUB_TOKEN": "env_token"}):
+                # Request with explicit token
+                res_path = service.clone_repository("https://github.com/owner/repo", github_token="my_secret_token")
+                # Assert URL passed to git clone has the token
+                mock_clone_from.assert_called_with("https://my_secret_token@github.com/owner/repo.git", ANY)
+                # Assert token is not in logs
+                for call in mock_logger.info.call_args_list:
+                    log_str = str(call)
+                    self.assertNotIn("my_secret_token", log_str)
+                    self.assertNotIn("env_token", log_str)
+
+        # (b) Cloning still works with no token
+        mock_clone_from.reset_mock()
+        with patch.dict(os.environ, {}, clear=True):
+            res_path = service.clone_repository("https://github.com/owner/repo", github_token=None)
+            mock_clone_from.assert_called_with("https://github.com/owner/repo.git", ANY)
+
+        # (c) GITHUB_TOKEN fallback
+        mock_clone_from.reset_mock()
+        with patch.dict(os.environ, {"GITHUB_TOKEN": "fallback_token"}):
+            res_path = service.clone_repository("https://github.com/owner/repo", github_token=None)
+            mock_clone_from.assert_called_with("https://fallback_token@github.com/owner/repo.git", ANY)
+
+    # --- New Feature 3 Tests ---
+
+    def test_ask_request_history_truncation(self) -> None:
+        from app.models.ask import AskRequest, ChatTurn
+        turns = [ChatTurn(role="user", content=f"Q{i}") for i in range(15)]
+        req = AskRequest(index_id="test-index", question="final Q", history=turns)
+        self.assertEqual(len(req.history), 12)
+        # Keeps the most recent 12 (Q3 to Q14)
+        self.assertEqual(req.history[0].content, "Q3")
+        self.assertEqual(req.history[-1].content, "Q14")
+
+    @patch("app.services.ask_service.AskService._get_client")
+    def test_ask_service_openai_history_inclusion(self, mock_get_client) -> None:
+        from app.services.ask_service import AskService
+        from app.services.retrieval_service import RetrievedChunk
+
+        mock_client = Mock()
+        mock_get_client.return_value = mock_client
+
+        # Mock retrieval
+        retrieved = [RetrievedChunk(text="def sym(): pass", file_path="file.py", symbol_name="sym", chunk_type="func", similarity_score=0.9)]
+        mock_retrieval = Mock()
+        mock_retrieval.retrieve.return_value = retrieved
+
+        # Setup AskService with mock retrieval
+        service = AskService(retrieval_service=mock_retrieval, client=mock_client)
+        service._provider = "openai"
+
+        # Mock OpenAI response
+        mock_response = Mock()
+        mock_response.choices = [Mock(message=Mock(content="Mocked Answer"))]
+        mock_client.chat.completions.create.return_value = mock_response
+
+        history = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there!"}
+        ]
+        res = service.ask("test-idx", "New Question", history=history)
+
+        self.assertEqual(res.answer, "Mocked Answer")
+        
+        # Verify messages sent to OpenAI client
+        call_args = mock_client.chat.completions.create.call_args[1]
+        messages = call_args["messages"]
+        self.assertEqual(len(messages), 4) # system, user, assistant, user-grounded
+        self.assertEqual(messages[0]["content"], service._SYSTEM_PROMPT)
+        self.assertEqual(messages[1], history[0])
+        self.assertEqual(messages[2], history[1])
+        self.assertIn("New Question", messages[3]["content"])
+        self.assertIn("Repository context", messages[3]["content"])
+
+    @patch("app.services.ask_service.AskService._get_client")
+    def test_ask_service_gemini_history_inclusion(self, mock_get_client) -> None:
+        from app.services.ask_service import AskService
+        from app.services.retrieval_service import RetrievedChunk
+
+        mock_client = Mock()
+        mock_get_client.return_value = mock_client
+
+        # Mock retrieval
+        retrieved = [RetrievedChunk(text="def sym(): pass", file_path="file.py", symbol_name="sym", chunk_type="func", similarity_score=0.9)]
+        mock_retrieval = Mock()
+        mock_retrieval.retrieve.return_value = retrieved
+
+        # Setup AskService with mock retrieval
+        service = AskService(retrieval_service=mock_retrieval, client=mock_client)
+        service._provider = "gemini"
+
+        # Mock Gemini response
+        mock_response = Mock()
+        mock_response.text = "Mocked Gemini Answer"
+        mock_client.models.generate_content.return_value = mock_response
+
+        history = [
+            {"role": "user", "content": "Hello Gemini"},
+            {"role": "assistant", "content": "Hi Gemini user!"}
+        ]
+        res = service.ask("test-idx", "New Question", history=history)
+
+        self.assertEqual(res.answer, "Mocked Gemini Answer")
+
+        # Verify contents sent to Gemini client
+        call_args = mock_client.models.generate_content.call_args[1]
+        contents = call_args["contents"]
+        self.assertIn("User: Hello Gemini", contents)
+        self.assertIn("Assistant: Hi Gemini user!", contents)
+        self.assertIn("New Question", contents)
+

@@ -142,6 +142,36 @@ class IndexService:
         shutil.rmtree(index_directory, ignore_errors=True)
         return True
 
+    def delete_expired_indexes(self, ttl_hours: float) -> list[str]:
+        """Delete all indexes that have been created more than ttl_hours ago."""
+        deleted_ids = []
+        indexes = self.list_indexes()
+        now = datetime.now(timezone.utc)
+        for idx in indexes:
+            index_id = idx["index_id"]
+            created_at_str = idx.get("created_at")
+            if not created_at_str:
+                logger.warning(
+                    "Index is missing created_at timestamp; skipping expiration cleanup",
+                    extra={"index_id": index_id}
+                )
+                continue
+            try:
+                created_at = datetime.fromisoformat(created_at_str)
+                if created_at.tzinfo is None:
+                    created_at = created_at.replace(tzinfo=timezone.utc)
+                age = now - created_at
+                if age.total_seconds() > ttl_hours * 3600:
+                    if self.delete_index(index_id):
+                        deleted_ids.append(index_id)
+            except Exception as exc:
+                logger.warning(
+                    "Index has unparseable created_at timestamp; skipping expiration cleanup",
+                    extra={"index_id": index_id, "created_at": created_at_str, "error": str(exc)}
+                )
+        return deleted_ids
+
+
     @staticmethod
     def _validate_index_id(index_id: str) -> None:
         if (

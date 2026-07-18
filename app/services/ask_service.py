@@ -71,7 +71,7 @@ class AskService:
             else:
                 self._model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
 
-    def ask(self, index_id: str, question: str) -> AskResult:
+    def ask(self, index_id: str, question: str, history: list[dict] | None = None) -> AskResult:
         """Retrieve relevant code and generate a grounded answer for ``question``."""
         total_started_at = perf_counter()
         normalized_question = question.strip()
@@ -90,19 +90,30 @@ class AskService:
         generation_started_at = perf_counter()
         try:
             if self._provider == "gemini":
-                prompt_content = f"System Instruction: {self._SYSTEM_PROMPT}\n\n{self._build_prompt(normalized_question, retrieved_chunks)}"
+                history_transcript = ""
+                if history:
+                    transcript_parts = []
+                    for turn in history:
+                        role_label = "User" if turn["role"] == "user" else "Assistant"
+                        transcript_parts.append(f"{role_label}: {turn['content']}")
+                    history_transcript = "\n".join(transcript_parts) + "\n\n"
+                prompt_content = f"System Instruction: {self._SYSTEM_PROMPT}\n\n{history_transcript}{self._build_prompt(normalized_question, retrieved_chunks)}"
                 response = self._get_client().models.generate_content(
                     model=self._model,
                     contents=prompt_content,
                 )
                 answer = response.text
             else:
+                messages = [
+                    {"role": "system", "content": self._SYSTEM_PROMPT},
+                ]
+                if history:
+                    for turn in history:
+                        messages.append({"role": turn["role"], "content": turn["content"]})
+                messages.append({"role": "user", "content": self._build_prompt(normalized_question, retrieved_chunks)})
                 response = self._get_client().chat.completions.create(
                     model=self._model,
-                    messages=[
-                        {"role": "system", "content": self._SYSTEM_PROMPT},
-                        {"role": "user", "content": self._build_prompt(normalized_question, retrieved_chunks)},
-                    ],
+                    messages=messages,
                 )
                 answer = response.choices[0].message.content
         except Exception as exc:
@@ -134,7 +145,7 @@ class AskService:
         )
         return AskResult(answer=answer.strip(), sources=sources)
 
-    def stream_ask(self, index_id: str, question: str) -> Generator[str, None, None]:
+    def stream_ask(self, index_id: str, question: str, history: list[dict] | None = None) -> Generator[str, None, None]:
         """Retrieve relevant code and stream a grounded answer as SSE events."""
         normalized_question = question.strip()
         if not normalized_question:
@@ -155,7 +166,14 @@ class AskService:
 
         try:
             if self._provider == "gemini":
-                prompt_content = f"System Instruction: {self._SYSTEM_PROMPT}\n\n{self._build_prompt(normalized_question, retrieved_chunks)}"
+                history_transcript = ""
+                if history:
+                    transcript_parts = []
+                    for turn in history:
+                        role_label = "User" if turn["role"] == "user" else "Assistant"
+                        transcript_parts.append(f"{role_label}: {turn['content']}")
+                    history_transcript = "\n".join(transcript_parts) + "\n\n"
+                prompt_content = f"System Instruction: {self._SYSTEM_PROMPT}\n\n{history_transcript}{self._build_prompt(normalized_question, retrieved_chunks)}"
                 response_stream = self._get_client().models.generate_content_stream(
                     model=self._model,
                     contents=prompt_content,
@@ -164,12 +182,16 @@ class AskService:
                     if chunk.text:
                         yield f'event: token\ndata: {json.dumps({"text": chunk.text})}\n\n'
             else:
+                messages = [
+                    {"role": "system", "content": self._SYSTEM_PROMPT},
+                ]
+                if history:
+                    for turn in history:
+                        messages.append({"role": turn["role"], "content": turn["content"]})
+                messages.append({"role": "user", "content": self._build_prompt(normalized_question, retrieved_chunks)})
                 response_stream = self._get_client().chat.completions.create(
                     model=self._model,
-                    messages=[
-                        {"role": "system", "content": self._SYSTEM_PROMPT},
-                        {"role": "user", "content": self._build_prompt(normalized_question, retrieved_chunks)},
-                    ],
+                    messages=messages,
                     stream=True,
                 )
                 for chunk in response_stream:

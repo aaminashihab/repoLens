@@ -8,6 +8,7 @@ marked.setOptions({
 });
 
 let currentIndexId = null;
+let conversationHistory = [];
 
 const elements = {
     repoUrl: document.getElementById('repo-url'),
@@ -88,6 +89,7 @@ async function pollStatus(indexId, repoUrl) {
 
 function setActiveIndex(indexId, repoUrl) {
     currentIndexId = indexId;
+    conversationHistory = [];
     elements.currentIndexInfo.className = 'index-info';
     elements.currentIndexInfo.innerHTML = `<strong>ID:</strong> ${indexId}<br><strong>Repo:</strong> ${repoUrl}`;
     
@@ -163,7 +165,7 @@ async function streamAnswer(indexId, question, contentEl) {
     const response = await fetch('/ask/stream', {
         method: 'POST',
         headers: getFetchHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ index_id: indexId, question: question })
+        body: JSON.stringify({ index_id: indexId, question: question, history: conversationHistory })
     });
     
     if (!response.ok) {
@@ -203,6 +205,12 @@ async function streamAnswer(indexId, question, contentEl) {
                 }
             }
         }
+    }
+
+    conversationHistory.push({ role: 'user', content: question });
+    conversationHistory.push({ role: 'assistant', content: markdownContent });
+    if (conversationHistory.length > 12) {
+        conversationHistory = conversationHistory.slice(-12);
     }
 }
 

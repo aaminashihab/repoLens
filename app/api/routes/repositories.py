@@ -42,10 +42,11 @@ def _run_indexing_job(
     embedding_service: EmbeddingService,
     index_service: IndexService,
     job_service: JobService,
+    github_token: str | None = None,
 ) -> None:
     started_at = perf_counter()
     try:
-        with repository_service.clone_repository_context(repo_url) as repository_path:
+        with repository_service.clone_repository_context(repo_url, github_token=github_token) as repository_path:
             try:
                 chunks = chunk_service.index_repository(repository_path)
             except RepositoryChunkError as exc:
@@ -112,9 +113,11 @@ def index_repository(
         embedding_service,
         index_service,
         job_service,
+        github_token=index_request.github_token,
     )
     
     return RepositoryIndexResponse(index_id=index_id, status="processing")
+
 
 @router.get(
     "/index-repository/{index_id}",
@@ -161,3 +164,33 @@ def delete_repository_index(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Index not found")
         
     return {"message": "Index and job status deleted successfully"}
+
+
+def run_indexes_cleanup(
+    ttl_hours: float,
+    index_service: IndexService,
+    job_service: JobService,
+) -> list[str]:
+    """Helper to clean up expired indexes and delete corresponding job statuses."""
+    deleted_ids = index_service.delete_expired_indexes(ttl_hours)
+    for index_id in deleted_ids:
+        try:
+            job_service.delete_job_status(index_id)
+        except ValueError:
+            pass
+    return deleted_ids
+
+
+@router.post(
+    "/indexes/cleanup",
+    summary="Clean up expired indexes immediately",
+)
+def cleanup_expired_indexes(
+    index_service: IndexService = Depends(get_index_service),
+    job_service: JobService = Depends(get_job_service),
+) -> dict:
+    """Run index cleanup and return list of deleted index IDs."""
+    ttl_hours = float(os.getenv("INDEX_TTL_HOURS", "168"))
+    deleted = run_indexes_cleanup(ttl_hours, index_service, job_service)
+    return {"deleted": deleted}
+

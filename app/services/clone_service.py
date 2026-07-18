@@ -3,6 +3,7 @@
 from collections.abc import Generator
 from contextlib import contextmanager
 import logging
+import os
 import re
 import shutil
 import tempfile
@@ -29,7 +30,13 @@ class CloneService:
     _SUPPORTED_HOSTS = {"github.com", "www.github.com"}
     _GITHUB_PATH_PART = re.compile(r"^[A-Za-z0-9_.-]+$")
 
-    def clone_repository(self, repo_url: str) -> Path:
+    def _authenticated_url(self, normalized_url: str, token: str | None) -> str:
+        """Splice token@ right after https:// if a token is provided."""
+        if token:
+            return normalized_url.replace("https://", f"https://{token}@")
+        return normalized_url
+
+    def clone_repository(self, repo_url: str, github_token: str | None = None) -> Path:
         """Clone a GitHub repository and return its local working-tree path.
 
         The returned directory is created under a system temporary directory.
@@ -37,12 +44,15 @@ class CloneService:
         after repository processing has completed.
         """
         normalized_url = self.validate_github_url(repo_url)
+        token = github_token if github_token is not None else os.getenv("GITHUB_TOKEN")
+        auth_url = self._authenticated_url(normalized_url, token)
+
         logger.info("Cloning GitHub repository", extra={"repo_url": normalized_url})
         working_directory: Path | None = None
         try:
             working_directory = Path(tempfile.mkdtemp(prefix="repolens-"))
             repository_path = working_directory / "repository"
-            Repo.clone_from(normalized_url, repository_path)
+            Repo.clone_from(auth_url, repository_path)
         except (GitError, OSError) as exc:
             if working_directory is not None:
                 shutil.rmtree(working_directory, ignore_errors=True)
@@ -62,11 +72,11 @@ class CloneService:
         return repository_path
 
     @contextmanager
-    def clone_repository_context(self, repo_url: str) -> Generator[Path, None, None]:
+    def clone_repository_context(self, repo_url: str, github_token: str | None = None) -> Generator[Path, None, None]:
         """Clone a GitHub repository and yield its local working-tree path,
         ensuring cleanup of the parent temporary directory upon exit.
         """
-        repository_path = self.clone_repository(repo_url)
+        repository_path = self.clone_repository(repo_url, github_token=github_token)
         try:
             yield repository_path
         finally:
