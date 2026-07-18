@@ -15,3 +15,7 @@ storage/
 # OS / Editor
 .vscode/
 .DS_Store
+
+# Test logs
+test_output.txt
+*.log
