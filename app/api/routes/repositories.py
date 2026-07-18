@@ -191,6 +191,9 @@ def cleanup_expired_indexes(
 ) -> dict:
     """Run index cleanup and return list of deleted index IDs."""
     ttl_hours = float(os.getenv("INDEX_TTL_HOURS", "168"))
+    if ttl_hours <= 0:
+        return {"deleted": []}
     deleted = run_indexes_cleanup(ttl_hours, index_service, job_service)
     return {"deleted": deleted}
+
 

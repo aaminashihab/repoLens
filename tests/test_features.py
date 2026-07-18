@@ -226,6 +226,22 @@ class RepoLensFeaturesTests(unittest.TestCase):
         mock_idx_srv.delete_expired_indexes.assert_called_once()
         self.assertEqual(mock_job_srv.delete_job_status.call_count, 2)
 
+    def test_post_indexes_cleanup_disabled_when_ttl_is_zero(self) -> None:
+        api_deps.API_KEY = None
+        mock_idx_srv = Mock()
+        mock_job_srv = Mock()
+
+        fastapi_app.dependency_overrides[api_deps.get_index_service] = lambda: mock_idx_srv
+        fastapi_app.dependency_overrides[api_deps.get_job_service] = lambda: mock_job_srv
+
+        with patch.dict(os.environ, {"INDEX_TTL_HOURS": "0"}):
+            res = self.client.post("/indexes/cleanup")
+            self.assertEqual(res.status_code, 200)
+            self.assertEqual(res.json(), {"deleted": []})
+            mock_idx_srv.delete_expired_indexes.assert_not_called()
+            mock_job_srv.delete_job_status.assert_not_called()
+
+
     # --- New Feature 2 Tests ---
 
     @patch("app.services.clone_service.Repo.clone_from")
