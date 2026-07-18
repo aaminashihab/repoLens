@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from git import GitError
+# pyrefly: ignore [missing-import]
 from fastapi.testclient import TestClient
 
 from app.main import app

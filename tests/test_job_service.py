@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 import shutil
 
+# pyrefly: ignore [missing-import]
 from fastapi import HTTPException
 from app.services.job_service import JobService
 from app.api.routes.repositories import get_indexing_status
