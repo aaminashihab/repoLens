@@ -4,15 +4,11 @@
 
 RepoLens clones a public (or private, with a token) GitHub repository, parses it with `tree-sitter`, embeds each function/class as a vector, and answers natural-language questions using retrieval-augmented generation over your own OpenAI or Gemini key. Answers stream back token-by-token with the exact file paths and symbols they're grounded in.
 
-![RepoLens User Interface](static/repolens_ui_screenshot.png)
+![RepoLens](static/repolens_logo.png)
 
 ## 📺 Video Demo
 
-Check out RepoLens in action:
-
-[![RepoLens Demo Video](https://img.youtube.com/vi/FW6FTw5s348/0.jpg)](https://youtu.be/FW6FTw5s348)
-
-*[Watch the walkthrough on YouTube](https://youtu.be/FW6FTw5s348)*
+Watch the walkthrough on YouTube: [RepoLens Walkthrough Demo](https://youtu.be/FW6FTw5s348)
 
 
 [![Tests](https://img.shields.io/badge/tests-34%20passing-brightgreen)](#testing)
