@@ -6,6 +6,15 @@ RepoLens clones a public (or private, with a token) GitHub repository, parses it
 
 ![RepoLens User Interface](static/repolens_ui_screenshot.png)
 
+## 📺 Video Demo
+
+Check out RepoLens in action:
+
+[![RepoLens Demo Video](https://img.youtube.com/vi/FW6FTw5s348/0.jpg)](https://youtu.be/FW6FTw5s348)
+
+*[Watch the walkthrough on YouTube](https://youtu.be/FW6FTw5s348)*
+
+
 [![Tests](https://img.shields.io/badge/tests-34%20passing-brightgreen)](#testing)
 [![Python](https://img.shields.io/badge/python-3.12-blue)](#tech-stack)
 [![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688)](#tech-stack)
@@ -211,6 +220,7 @@ pytest tests/
 
 ---
 
-## License
+## 📜 License & Contributing
 
-MIT
+- **License:** This project is licensed under the [MIT License](LICENSE).
+- **Contributing:** Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to get started.
