@@ -70,12 +70,28 @@ body {
     margin-top: 4px;
 }
 
-.index-section h3, .history-section h3 {
+.index-section h3, .history-section h3, .auth-section h3, .indexes-section h3 {
     font-size: 0.875rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--text-secondary);
     margin-bottom: 12px;
+}
+
+.auth-hint {
+    margin-top: 8px;
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    opacity: 0.8;
+}
+
+.auth-hint code {
+    font-family: 'Consolas', monospace;
+    background: rgba(255,255,255,0.07);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 0.9em;
 }
 
 .input-group {
@@ -395,4 +411,105 @@ button {
     color: var(--danger) !important;
     background: rgba(239, 68, 68, 0.1) !important;
 }
+
+/* Settings Section */
+.settings-section {
+    margin-top: auto;
+    border-top: 1px solid var(--glass-border);
+    padding-top: 16px;
+}
+
+.settings-toggle {
+    width: 100%;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 4px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: color 0.2s;
+}
+
+.settings-label-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.settings-toggle:hover {
+    color: var(--text-primary);
+}
+
+.settings-toggle .chevron {
+    transition: transform 0.2s ease;
+}
+
+.settings-toggle.open .chevron {
+    transform: rotate(180deg);
+}
+
+.settings-content {
+    margin-top: 12px;
+    padding: 12px;
+    background: rgba(15, 23, 42, 0.4);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    transition: all 0.2s ease-in-out;
+}
+
+.settings-content.hidden {
+    display: none;
+}
+
+/* Settings Status Row */
+.settings-status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.status-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.status-indicator.green {
+    background-color: var(--success);
+    box-shadow: 0 0 8px var(--success);
+}
+
+.status-indicator.red {
+    background-color: var(--danger);
+    box-shadow: 0 0 8px var(--danger);
+}
+
+.status-indicator.yellow {
+    background-color: #eab308;
+    box-shadow: 0 0 8px #eab308;
+}
+
+.status-indicator.grey {
+    background-color: #64748b;
+}
+
+.status-text {
+    font-size: 0.8rem;
+}
+
+.status-text.green {
+    color: var(--success);
+}
+
+.status-text.red {
+    color: var(--danger);
+}
+
+
 

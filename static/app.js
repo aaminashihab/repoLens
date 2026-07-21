@@ -91,7 +91,9 @@ function setActiveIndex(indexId, repoUrl) {
     currentIndexId = indexId;
     conversationHistory = [];
     elements.currentIndexInfo.className = 'index-info';
-    elements.currentIndexInfo.innerHTML = `<strong>ID:</strong> ${indexId}<br><strong>Repo:</strong> ${repoUrl}`;
+    const cleanIndexId = DOMPurify.sanitize(indexId);
+    const cleanRepoUrl = DOMPurify.sanitize(repoUrl);
+    elements.currentIndexInfo.innerHTML = `<strong>ID:</strong> ${cleanIndexId}<br><strong>Repo:</strong> ${cleanRepoUrl}`;
     
     elements.chatInput.disabled = false;
     elements.sendBtn.disabled = false;
@@ -130,7 +132,8 @@ elements.chatForm.addEventListener('submit', async (e) => {
     try {
         await streamAnswer(currentIndexId, question, contentEl);
     } catch (err) {
-        contentEl.innerHTML = `<p style="color: var(--danger)">Error: ${err.message}</p>`;
+        const cleanErrMessage = DOMPurify.sanitize(err.message);
+        contentEl.innerHTML = `<p style="color: var(--danger)">Error: ${cleanErrMessage}</p>`;
     } finally {
         elements.chatInput.disabled = false;
         elements.sendBtn.disabled = false;
@@ -248,7 +251,8 @@ async function loadIndexes() {
             if (res.status === 401) {
                 listEl.innerHTML = '<div class="index-item-empty" style="color: var(--danger)">Auth required. Enter API Key.</div>';
             } else {
-                listEl.innerHTML = `<div class="index-item-empty">Failed to load indexes (${res.status})</div>`;
+                const cleanStatus = DOMPurify.sanitize(String(res.status));
+                listEl.innerHTML = `<div class="index-item-empty">Failed to load indexes (${cleanStatus})</div>`;
             }
             return;
         }
@@ -277,13 +281,18 @@ async function loadIndexes() {
             
             const createdStr = idx.created_at ? new Date(idx.created_at).toLocaleString() : 'N/A';
             
+            const cleanRepoUrl = DOMPurify.sanitize(idx.repo_url || '');
+            const cleanRepoName = DOMPurify.sanitize(repoName);
+            const cleanVectorCount = DOMPurify.sanitize(String(idx.vector_count));
+            const cleanCreatedStr = DOMPurify.sanitize(createdStr);
+
             itemEl.innerHTML = `
                 <div class="details">
-                    <span class="repo-name" title="${idx.repo_url || ''}">${repoName}</span>
-                    <span class="meta-info">${idx.vector_count} chunks • ${createdStr}</span>
+                    <span class="repo-name" title="${cleanRepoUrl}">${cleanRepoName}</span>
+                    <span class="meta-info">${cleanVectorCount} chunks • ${cleanCreatedStr}</span>
                 </div>
                 <button class="btn-delete" title="Delete Index">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                 </button>
             `;
             
@@ -321,19 +330,74 @@ async function loadIndexes() {
             listEl.appendChild(itemEl);
         });
     } catch (err) {
-        listEl.innerHTML = `<div class="index-item-empty">Error: ${err.message}</div>`;
+        const cleanErr = DOMPurify.sanitize(err.message);
+        listEl.innerHTML = `<div class="index-item-empty">Error: ${cleanErr}</div>`;
     }
 }
 
-// Initialize API Key configuration and load index list on page load
-document.addEventListener('DOMContentLoaded', () => {
-    const apiKeyInput = document.getElementById('api-key-input');
-    if (apiKeyInput) {
-        apiKeyInput.value = localStorage.getItem('repolens_api_key') || '';
-        apiKeyInput.addEventListener('input', (e) => {
-            localStorage.setItem('repolens_api_key', e.target.value);
-            loadIndexes();
+// Initialize page load
+document.addEventListener('DOMContentLoaded', async () => {
+    const healthIndicator = document.getElementById('health-indicator');
+    const healthStatusText = document.getElementById('health-status-text');
+
+    async function checkHealth() {
+        if (healthIndicator) {
+            healthIndicator.className = 'status-indicator grey';
+            healthIndicator.title = 'Checking server connection...';
+        }
+        if (healthStatusText) {
+            healthStatusText.textContent = 'Checking...';
+            healthStatusText.className = 'status-text';
+        }
+
+        try {
+            const res = await fetch('/health');
+            if (res.ok) {
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    if (healthIndicator) {
+                        healthIndicator.className = 'status-indicator green';
+                        healthIndicator.title = 'Connected to server';
+                    }
+                    if (healthStatusText) {
+                        healthStatusText.textContent = 'Connected';
+                        healthStatusText.className = 'status-text green';
+                    }
+                    return;
+                }
+            }
+            throw new Error('Invalid response');
+        } catch (err) {
+            if (healthIndicator) {
+                healthIndicator.className = 'status-indicator red';
+                healthIndicator.title = 'Server connection error';
+            }
+            if (healthStatusText) {
+                healthStatusText.textContent = 'Error';
+                healthStatusText.className = 'status-text red';
+            }
+        }
+    }
+
+    // Toggle collapsible settings
+    const settingsToggleBtn = document.getElementById('settings-toggle-btn');
+    const settingsContent = document.getElementById('settings-content');
+    if (settingsToggleBtn && settingsContent) {
+        settingsToggleBtn.addEventListener('click', () => {
+            const isOpen = settingsToggleBtn.classList.toggle('open');
+            if (isOpen) {
+                settingsContent.classList.remove('hidden');
+            } else {
+                settingsContent.classList.add('hidden');
+            }
         });
     }
+
+    // Run health check initially
+    await checkHealth();
+
+    // Start periodic polling of health (every 30 seconds)
+    setInterval(checkHealth, 30000);
+
     loadIndexes();
 });

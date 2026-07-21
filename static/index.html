@@ -16,13 +16,6 @@
                 <h2>RepoLens</h2>
                 <p>AI Codebase Search</p>
             </div>
-
-            <div class="auth-section">
-                <h3>API Key</h3>
-                <div class="input-group">
-                    <input type="password" id="api-key-input" placeholder="X-API-Key (optional)">
-                </div>
-            </div>
             
             <div class="index-section">
                 <h3>Index Repository</h3>
@@ -46,6 +39,23 @@
                 <h3>Current Index</h3>
                 <div id="current-index-info" class="index-info empty">
                     No active index.
+                </div>
+            </div>
+
+            <!-- Collapsible Settings -->
+            <div class="settings-section">
+                <button class="settings-toggle" id="settings-toggle-btn">
+                    <div class="settings-label-group">
+                        <span>⚙️ Settings</span>
+                        <span id="health-indicator" class="status-indicator grey" title="Checking server connection..."></span>
+                    </div>
+                    <svg class="chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+                <div class="settings-content hidden" id="settings-content">
+                    <div class="settings-status-row">
+                        <span class="status-label">Connection Status:</span>
+                        <span id="health-status-text" class="status-text">Checking...</span>
+                    </div>
                 </div>
             </div>
         </aside>

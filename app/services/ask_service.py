@@ -67,7 +67,7 @@ class AskService:
             self._model = model
         else:
             if self._provider == "gemini":
-                self._model = "gemini-1.5-flash"
+                self._model = os.getenv("GEMINI_CHAT_MODEL", "gemini-2.5-flash")
             else:
                 self._model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
 
@@ -241,7 +241,7 @@ class AskService:
             if self._provider == "gemini":
                 try:
                     from google import genai
-                    self._client = genai.Client()
+                    self._client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
                 except Exception as exc:
                     raise AskServiceError(
                         "Unable to initialize the Gemini client. Set GEMINI_API_KEY."

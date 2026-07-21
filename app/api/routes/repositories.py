@@ -60,10 +60,19 @@ def _run_indexing_job(
 
     try:
         embedded_chunks = embedding_service.embed_chunks(chunks)
-        index_service.build_index(index_id, embedded_chunks, repo_url=repo_url)
+        index_service.build_index(
+            index_id,
+            embedded_chunks,
+            repo_url=repo_url,
+            dimension=embedding_service.embedding_dimension,
+        )
     except (EmbeddingServiceError, IndexServiceError) as exc:
-        logger.error(f"Failed to build index: {exc}")
+        logger.error(f"Failed to build index: {exc}", exc_info=True)
         job_service.update_job_status(index_id, "failed", str(exc))
+        return
+    except Exception as exc:
+        logger.error(f"Unexpected error during indexing: {exc}", exc_info=True)
+        job_service.update_job_status(index_id, "failed", f"Unexpected error: {exc}")
         return
 
     job_service.update_job_status(index_id, "completed")
@@ -191,6 +200,9 @@ def cleanup_expired_indexes(
 ) -> dict:
     """Run index cleanup and return list of deleted index IDs."""
     ttl_hours = float(os.getenv("INDEX_TTL_HOURS", "168"))
+    # A value of 0 or negative disables index expiry entirely on both the
+    # scheduled background sweep and the manual /indexes/cleanup endpoint.
+    # Reference test: test_post_indexes_cleanup_disabled_when_ttl_is_zero in tests/test_features.py
     if ttl_hours <= 0:
         return {"deleted": []}
     deleted = run_indexes_cleanup(ttl_hours, index_service, job_service)

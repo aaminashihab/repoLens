@@ -37,7 +37,13 @@ class IndexService:
     def __init__(self, storage_path: Path = Path("storage/indexes")) -> None:
         self._storage_path = storage_path
 
-    def build_index(self, index_id: str, embedded_chunks: list[EmbeddedChunk], repo_url: str = "") -> LoadedIndex:
+    def build_index(
+        self,
+        index_id: str,
+        embedded_chunks: list[EmbeddedChunk],
+        repo_url: str = "",
+        dimension: int = 1536,
+    ) -> LoadedIndex:
         """Build and persist a FAISS L2 index under ``storage/indexes/index_id``."""
         self._validate_index_id(index_id)
         faiss = self._faiss()
@@ -55,7 +61,7 @@ class IndexService:
                 index = faiss.IndexFlatL2(vectors.shape[1])
                 index.add(vectors)
             else:
-                index = faiss.IndexFlatL2(1536)
+                index = faiss.IndexFlatL2(dimension)
 
             faiss.write_index(index, str(index_path))
             created_at = datetime.now(timezone.utc).isoformat()
@@ -174,13 +180,11 @@ class IndexService:
 
     @staticmethod
     def _validate_index_id(index_id: str) -> None:
-        if (
-            not index_id
-            or "/" in index_id
-            or "\\" in index_id
-            or index_id in {".", ".."}
-        ):
-            raise IndexServiceError("Index ID must be a single directory name.")
+        from app.core.validation import validate_safe_id
+        try:
+            validate_safe_id(index_id, "Index ID")
+        except ValueError as exc:
+            raise IndexServiceError(str(exc)) from exc
 
     @staticmethod
     def _faiss() -> Any:

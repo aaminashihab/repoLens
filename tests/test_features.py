@@ -43,6 +43,8 @@ class RepoLensFeaturesTests(unittest.TestCase):
 
         # Set up a mock dependencies override if necessary
         api_deps.API_KEY = None
+        fastapi_app.dependency_overrides[api_deps.get_index_service] = lambda: self.index_service
+        fastapi_app.dependency_overrides[api_deps.get_job_service] = lambda: self.job_service
 
     def tearDown(self) -> None:
         shutil.rmtree(self.temp_dir, ignore_errors=True)

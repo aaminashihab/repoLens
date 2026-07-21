@@ -1,21 +1,33 @@
 # Python
 __pycache__/
 *.py[cod]
+*.egg-info/
+.eggs/
 
 # Virtual environment
 .venv/
 venv/
+env/
 
 # Environment variables
 .env
+.env.*
+!.env.example
 
-# Storage
+# Storage (indexes, jobs, cloned repos)
 storage/
+
+# Test / lint / type-check caches
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+test_output.txt
+*.log
 
 # OS / Editor
 .vscode/
+.idea/
 .DS_Store
-
-# Test logs
-test_output.txt
-*.log
+Thumbs.db

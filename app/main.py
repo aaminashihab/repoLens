@@ -21,8 +21,36 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Mark any jobs left in 'processing' from a previous server run as failed.
+    # These are orphaned background tasks that will never complete.
+    try:
+        from app.api.dependencies import get_job_service
+        from app.services.job_service import JobService
+        import json
+        from pathlib import Path
+        job_storage = Path("storage/jobs")
+        if job_storage.is_dir():
+            orphaned = 0
+            for job_file in job_storage.glob("*.json"):
+                try:
+                    data = json.loads(job_file.read_text(encoding="utf-8"))
+                    if data.get("status") == "processing":
+                        data["status"] = "failed"
+                        data["error"] = "Server was restarted while this job was running."
+                        job_file.write_text(json.dumps(data), encoding="utf-8")
+                        orphaned += 1
+                except Exception:
+                    pass
+            if orphaned:
+                logger.warning(f"Marked {orphaned} orphaned 'processing' job(s) as failed on startup.")
+    except Exception:
+        pass
+
     ttl_hours = float(os.getenv("INDEX_TTL_HOURS", "168"))
     cleanup_task = None
+    # A value of 0 or negative disables index expiry entirely on both the
+    # scheduled background sweep and the manual /indexes/cleanup endpoint.
+    # Reference test: test_post_indexes_cleanup_disabled_when_ttl_is_zero in tests/test_features.py
     if ttl_hours > 0:
         async def sweep_loop():
             interval_min = int(os.getenv("INDEX_CLEANUP_INTERVAL_MINUTES", "60"))
@@ -48,6 +76,9 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
 
+    from app.services.embedding_service import _EXECUTOR
+    _EXECUTOR.shutdown(wait=True)
+
 
 app = FastAPI(
     title="RepoLens API",
@@ -64,7 +95,40 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 if not os.getenv("API_KEY"):
     logger.warning("API_KEY is not set. API key authentication is disabled.")
 
+# Warn at startup if the embedding provider key looks missing or malformed.
+_provider = os.getenv("LLM_PROVIDER", "openai").lower()
+if _provider == "gemini":
+    _gemini_key = os.getenv("GEMINI_API_KEY", "")
+    if not _gemini_key:
+        logger.error(
+            "GEMINI_API_KEY is not set. Embedding requests will fail. "
+            "Set it in your .env file and restart the server."
+        )
+    elif not (_gemini_key.startswith("AIza") or _gemini_key.startswith("AQ.")):
+        logger.warning(
+            "GEMINI_API_KEY does not look like a valid Gemini API key "
+            "(expected it to start with 'AIza' or 'AQ.'). Get a key from "
+            "https://aistudio.google.com/app/apikey"
+        )
+else:
+    _openai_key = os.getenv("OPENAI_API_KEY", "")
+    if not _openai_key:
+        logger.error(
+            "OPENAI_API_KEY is not set. Embedding requests will fail. "
+            "Set it in your .env file and restart the server."
+        )
+    elif not _openai_key.startswith("sk-"):
+        logger.warning(
+            "OPENAI_API_KEY does not look like a valid OpenAI key "
+            "(expected it to start with 'sk-')."
+        )
+
 @app.get("/", tags=["ui"])
 async def read_root() -> FileResponse:
     """Return the frontend UI."""
     return FileResponse("static/index.html")
+
+@app.get("/health", tags=["ui"])
+async def get_health() -> dict:
+    """Return a lightweight health status of the backend."""
+    return {"status": "ok"}

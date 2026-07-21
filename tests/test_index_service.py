@@ -46,3 +46,32 @@ class IndexServiceTests(unittest.TestCase):
     def test_rejects_invalid_index_id(self) -> None:
         with self.assertRaises(IndexServiceError):
             IndexService().build_index("../outside", [])
+
+    def test_build_empty_index_both_providers(self) -> None:
+        from app.services.embedding_service import EmbeddingService
+
+        saved_indexes = {}
+        def write_index(index, path):
+            Path(path).write_text("fake", encoding="utf-8")
+            saved_indexes[path] = index
+
+        fake_faiss = SimpleNamespace(IndexFlatL2=FakeIndex, write_index=write_index)
+        
+        with tempfile.TemporaryDirectory() as directory, patch.object(IndexService, "_faiss", return_value=fake_faiss):
+            service = IndexService(Path(directory))
+            
+            # OpenAI / text-embedding-3-small (default)
+            openai_service = EmbeddingService(model="text-embedding-3-small")
+            self.assertEqual(openai_service.embedding_dimension, 1536)
+            
+            built_openai = service.build_index("empty-openai", [], dimension=openai_service.embedding_dimension)
+            self.assertEqual(built_openai.index.d, 1536)
+            self.assertEqual(built_openai.index.ntotal, 0)
+            
+            # Gemini / text-embedding-004
+            gemini_service = EmbeddingService(model="text-embedding-004")
+            self.assertEqual(gemini_service.embedding_dimension, 768)
+            
+            built_gemini = service.build_index("empty-gemini", [], dimension=gemini_service.embedding_dimension)
+            self.assertEqual(built_gemini.index.d, 768)
+            self.assertEqual(built_gemini.index.ntotal, 0)
