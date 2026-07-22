@@ -28,7 +28,7 @@ Most "chat with your codebase" demos stop at "clone repo → embed → answer." 
 - **Frontend XSS consistency gaps** where secondary UI elements (such as repository URLs in list items and active header info) bypassed sanitization. Wrapped all remaining API-derived values in `DOMPurify` before injecting them into `innerHTML`.
 - **A credential-leak check most people skip**: when private-repo cloning was added, I explicitly verified that a failed `git clone` with a token embedded in the URL doesn't leak that token into application logs — GitPython redacts it in its own error formatting, but I didn't assume that; I tested it.
 
-Full write-up: *(link to blog post here once published)*.
+
 
 ---
 
