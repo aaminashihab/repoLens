@@ -146,7 +146,7 @@ Open `http://localhost:8000` for the UI, or use the API directly (below).
 
 ---
 
-## 📖 API Reference
+##  API Reference
 
 | Method | Path | Description |
 |---|---|---|
@@ -216,7 +216,7 @@ pytest tests/
 
 ---
 
-## 📜 License & Contributing
+##  License & Contributing
 
 - **License:** This project is licensed under the [MIT License](LICENSE).
 - **Contributing:** Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to get started.
