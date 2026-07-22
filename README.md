@@ -1,4 +1,4 @@
-# 🔍 RepoLens
+#  RepoLens
 
 **Ask questions about any GitHub repository in plain English — and get answers grounded in the actual code, with citations.**
 
@@ -6,7 +6,7 @@ RepoLens clones a public (or private, with a token) GitHub repository, parses it
 
 ![RepoLens](static/repolens_logo.png)
 
-## 📺 Video Demo
+##  Video Demo
 
 Watch the walkthrough on YouTube: [RepoLens Walkthrough Demo](https://youtu.be/FW6FTw5s348)
 
@@ -31,7 +31,7 @@ Full write-up: *(link to blog post here once published)*.
 
 ---
 
-## ✨ Features
+## Features
 
 - **Semantic code search** — vector embeddings (OpenAI or Gemini) + FAISS, so search understands what code *does*, not just keyword matches.
 - **Symbol-aware chunking** — `tree-sitter` parses Python source into functions/classes/methods rather than naive line-based splitting, so retrieved context is always a complete, meaningful unit.
@@ -44,7 +44,7 @@ Full write-up: *(link to blog post here once published)*.
 
 ---
 
-## 🏗️ Architecture
+##  Architecture
 
 ```
                 POST /index-repository
@@ -86,7 +86,7 @@ Each stage is an isolated, independently-testable service (`CloneService`, `Chun
 
 ---
 
-## 🛠️ Tech Stack
+##  Tech Stack
 
 | Layer | Choice |
 |---|---|
@@ -101,7 +101,7 @@ Each stage is an isolated, independently-testable service (`CloneService`, `Chun
 
 ---
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### 1. Install
 
@@ -197,7 +197,7 @@ data: {}
 
 ---
 
-## 🧪 Testing
+##  Testing
 
 ```bash
 pytest tests/
@@ -207,7 +207,7 @@ pytest tests/
 
 ---
 
-## 🗺️ What I'd build next
+##  What I'd build next
 
 - **Multi-language chunking** — `tree-sitter` grammars exist for JS/TS, Go, Rust; currently hardcoded to Python.
 - **Incremental re-indexing** — diff against the last indexed commit SHA instead of re-embedding the whole repo on every update.
