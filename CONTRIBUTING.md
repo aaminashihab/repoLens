@@ -2,17 +2,17 @@
 
 Thank you for your interest in contributing to RepoLens! We welcome all contributions, including bug reports, feature requests, documentation improvements, and pull requests.
 
-## 🤝 Code of Conduct
+##  Code of Conduct
 
 Please be respectful and constructive in all communication with the maintainers and other contributors.
 
-## 🐛 Reporting Issues
+## Reporting Issues
 
 If you find a bug or have a feature request:
 1. Search the existing issues to see if it has already been reported.
 2. If not, open a new issue. Include as much detail as possible, such as steps to reproduce, expected behavior, logs, and screenshots if applicable.
 
-## 🛠️ Pull Requests
+## Pull Requests
 
 We follow the standard GitHub flow:
 1. **Fork** the repository to your own account.
@@ -44,11 +44,11 @@ We follow the standard GitHub flow:
 7. **Commit your changes** with clear and descriptive commit messages.
 8. **Push** your branch to your fork and **open a Pull Request** (PR) to our `main` branch.
 
-## 🧪 Testing Guidelines
+## Testing Guidelines
 
 - We aim to keep test coverage high. If you are adding a new feature or fixing a bug, please include corresponding unit or integration tests in the `tests/` directory.
 - Run tests before submitting a PR: `pytest tests/`.
 
-## 📜 License
+## License
 
 By contributing, you agree that your contributions will be licensed under the project's [MIT License](LICENSE).
