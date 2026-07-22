@@ -14,6 +14,7 @@ Watch the walkthrough on YouTube: [RepoLens Walkthrough Demo](https://youtu.be/F
 [![Tests](https://img.shields.io/badge/tests-34%20passing-brightgreen)](#testing)
 [![Python](https://img.shields.io/badge/python-3.12-blue)](#tech-stack)
 [![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688)](#tech-stack)
+[![CI](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml/badge.svg)](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml)
 
 ---
 
