@@ -93,14 +93,27 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-cors_origins_raw = os.getenv("CORS_ORIGINS", "*")
+cors_origins_raw = os.getenv("CORS_ORIGINS", "")
 cors_origins = [o.strip() for o in cors_origins_raw.split(",") if o.strip()]
+
+# Restrictive default: if CORS_ORIGINS is unset, limit to local origins
+if not cors_origins:
+    cors_origins = [
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:3000",
+    ]
+
+# Default allow_credentials to False (RepoLens uses X-API-Key header, not cookies)
+allow_credentials = False
+if os.getenv("CORS_ALLOW_CREDENTIALS", "false").lower() == "true" and "*" not in cors_origins:
+    allow_credentials = True
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_credentials=allow_credentials,
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
