@@ -56,14 +56,18 @@ class CloneService:
         except (GitError, OSError) as exc:
             if working_directory is not None:
                 shutil.rmtree(working_directory, ignore_errors=True)
-            logger.exception(
-                "Failed to clone GitHub repository",
+            exc_str = str(exc)
+            if token:
+                exc_str = re.sub(re.escape(token), "***", exc_str)
+            logger.error(
+                "Failed to clone GitHub repository: %s",
+                exc_str,
                 extra={"repo_url": normalized_url},
             )
             raise RepositoryCloneError(
                 "Unable to clone the GitHub repository. Confirm that the URL is "
                 "correct and that the repository is accessible."
-            ) from exc
+            ) from None
 
         logger.info(
             "GitHub repository cloned successfully",

@@ -39,7 +39,10 @@ class GuardrailValidator:
             if item.file_path in available_files or not available_files:
                 validated_supporting.append(item)
             else:
-                logger.warning(f"Guardrail stripped uncited/invalid file path: {item.file_path}")
+                logger.warning(
+                    "Guardrail stripped uncited/invalid file path",
+                    extra={"file_path": item.file_path},
+                )
 
         for item in report.contradicting_evidence:
             if item.file_path in available_files or not available_files:
@@ -52,8 +55,11 @@ class GuardrailValidator:
 
         if completeness_score < GuardrailValidator.MIN_COMPLETENESS_THRESHOLD:
             logger.info(
-                f"Refusal triggered: Evidence completeness ({completeness_score:.2f}) "
-                f"is below threshold ({GuardrailValidator.MIN_COMPLETENESS_THRESHOLD:.2f})."
+                "Refusal triggered: Evidence completeness below threshold",
+                extra={
+                    "completeness_score": completeness_score,
+                    "threshold": GuardrailValidator.MIN_COMPLETENESS_THRESHOLD,
+                },
             )
             new_status = VerificationStatus.UNCERTAIN
             new_confidence = min(report.confidence_score, 49.0)

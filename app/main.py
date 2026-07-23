@@ -42,7 +42,10 @@ async def lifespan(app: FastAPI):
                 except Exception:
                     pass
             if orphaned:
-                logger.warning(f"Marked {orphaned} orphaned 'processing' job(s) as failed on startup.")
+                logger.warning(
+                    "Marked orphaned 'processing' job(s) as failed on startup",
+                    extra={"orphaned_count": orphaned},
+                )
     except Exception:
         pass
 
@@ -94,6 +97,9 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 if not os.getenv("API_KEY"):
     logger.warning("API_KEY is not set. API key authentication is disabled.")
+
+if not os.getenv("GITHUB_WEBHOOK_SECRET"):
+    logger.warning("GITHUB_WEBHOOK_SECRET is not set. Webhook signature verification is disabled.")
 
 # Warn at startup if the embedding provider key looks missing or malformed.
 _provider = os.getenv("LLM_PROVIDER", "openai").lower()

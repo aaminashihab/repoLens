@@ -86,7 +86,11 @@ class RepoVerifyEvaluator:
                         citation_hits += 1
 
             except Exception as exc:
-                logger.error(f"Benchmark case {case.case_id} failed with error: {exc}")
+                logger.error(
+                    "Benchmark case %s failed with error: %s",
+                    case.case_id,
+                    exc,
+                )
 
         total = len(test_cases)
         avg_precision = (
