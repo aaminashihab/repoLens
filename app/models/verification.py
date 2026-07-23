@@ -48,33 +48,31 @@ class RecommendedTest(BaseModel):
     )
 
 
-# Chatbot / ambiguous prompt patterns that are NOT code claims
-_CHATBOT_PATTERNS = (
-    "what would you like",
-    "tell me about",
-    "explain the",
-    "explain this",
-    "explain how",
-    "how does",
-    "how do i",
-    "what is",
-    "what are",
-    "who are",
-    "can you",
-    "could you",
-    "please help",
-    "help me",
-    "summarize",
-    "describe",
-    "show me",
-    "list all",
-    "give me",
-    "what do",
-    "imagine you",
+# Generic non-technical chatbot prompt patterns
+_PURE_CHATBOT_PATTERNS = (
+    "what would you like to do",
+    "tell me about yourself",
+    "who are you",
+    "explain the repo as if i'm a new engineer",
+    "explain the repository as if i'm a new engineer",
     "act as",
-    "as a new engineer",
-    "joining the team",
+    "imagine you are",
+    "how are you",
+    "what is your name",
+    "hello",
+    "hi there",
 )
+
+# Technical domain keywords — presence of these allows technical questions
+_TECHNICAL_TERMS = {
+    "auth", "middleware", "token", "redis", "query", "sql", "function", "class",
+    "module", "api", "database", "method", "exception", "handler", "cache", "jwt",
+    "route", "header", "encryption", "hash", "key", "password", "lock", "thread",
+    "async", "event", "webhook", "config", "test", "benchmark", "validation",
+    "parameter", "error", "file", "path", "symbol", "variable", "line", "service",
+    "repository", "endpoint", "request", "response", "payload", "model", "schema",
+    "index", "faiss", "vector", "embedding", "git", "github", "pr", "issue",
+}
 
 
 class VerificationRequest(BaseModel):
@@ -102,13 +100,26 @@ class VerificationRequest(BaseModel):
                 "(e.g., 'Does the auth middleware prevent privilege escalation?')."
             )
         lower = cleaned.lower()
-        for pattern in _CHATBOT_PATTERNS:
-            if lower.startswith(pattern) or f" {pattern}" in lower[:60]:
+
+        # Reject pure non-technical meta-chatbot prompts
+        for pattern in _PURE_CHATBOT_PATTERNS:
+            if pattern in lower:
                 raise ValueError(
-                    f"'{cleaned[:60]}...' looks like a general question, not a verifiable code claim. "
-                    "RepoLens verifies specific code claims (e.g., 'The rate limiter uses Redis', "
+                    f"'{cleaned[:60]}...' looks like a general chatbot prompt, not a verifiable code claim. "
+                    "RepoLens verifies specific engineering claims (e.g., 'The rate limiter uses Redis', "
                     "'JWT tokens are validated on every authenticated route')."
                 )
+
+        # Allow technical questions that mention specific code concepts
+        is_question = any(lower.startswith(q) for q in ("how does", "how do", "what is", "what are", "can you", "could you", "does the", "is the"))
+        has_tech_term = any(term in lower for term in _TECHNICAL_TERMS) or any(c in cleaned for c in ("()", "_", "/", ".py", ".ts", ".js", ".go"))
+
+        if is_question and not has_tech_term:
+            raise ValueError(
+                f"'{cleaned[:60]}...' is a general question without specific code terms. "
+                "Specify the module, function, or technical behavior to verify."
+            )
+
         return cleaned
 
 

@@ -31,3 +31,4 @@ test_output.txt
 .idea/
 .DS_Store
 Thumbs.db
+*.zip

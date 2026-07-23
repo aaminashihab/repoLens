@@ -83,6 +83,8 @@ async def lifespan(app: FastAPI):
     _EXECUTOR.shutdown(wait=True)
 
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI(
     title="RepoLens API",
     version="0.1.0",
@@ -90,6 +92,17 @@ app = FastAPI(
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+cors_origins_raw = os.getenv("CORS_ORIGINS", "*")
+cors_origins = [o.strip() for o in cors_origins_raw.split(",") if o.strip()]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(api_router)
 app.mount("/static", StaticFiles(directory="static"), name="static")

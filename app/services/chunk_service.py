@@ -192,7 +192,7 @@ class ChunkService:
                         "Total repository byte budget exceeded; stopping file scan",
                         extra={"total_bytes_so_far": total_bytes, "limit": cls._MAX_TOTAL_BYTES},
                     )
-                    break
+                    return source_files, python_files
 
                 source_files.append(p)
                 if p.suffix == ".py":

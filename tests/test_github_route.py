@@ -32,7 +32,7 @@ class GithubRouteTests(unittest.TestCase):
         fastapi_app.dependency_overrides.clear()
         api_deps.API_KEY = self.orig_api_key
 
-    def test_github_webhook_pull_request_opened(self) -> None:
+    def test_github_webhook_pull_request_opened_no_index(self) -> None:
         headers = {"X-GitHub-Event": "pull_request"}
         payload = {
             "action": "opened",
@@ -41,10 +41,48 @@ class GithubRouteTests(unittest.TestCase):
                 "title": "Fix sql injection",
                 "body": "This PR sanitizes the user input in search query",
             },
+            "repository": {
+                "clone_url": "https://github.com/owner/repo.git",
+            },
         }
         response = self.client.post("/github/webhook", json=payload, headers=headers)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"status": "verification_queued", "pr_number": "42"})
+        self.assertEqual(response.json()["status"], "verification_skipped")
+        self.assertEqual(response.json()["pr_number"], "42")
+
+    def test_github_webhook_pull_request_opened_with_matching_index(self) -> None:
+        mock_index_service = Mock()
+        mock_index_service.list_indexes.return_value = [
+            {"index_id": "idx-123", "repo_url": "https://github.com/owner/repo.git", "vector_count": 50, "created_at": "2026-07-23T00:00:00Z"}
+        ]
+        fastapi_app.dependency_overrides[api_deps.get_index_service] = lambda: mock_index_service
+
+        from app.models.verification import VerificationReport, VerificationStatus
+        mock_report = Mock(spec=VerificationReport)
+        mock_report.verification_status = VerificationStatus.LIKELY_TRUE
+        mock_report.confidence_score = 95.0
+        mock_report.supporting_evidence = []
+        self.mock_service.verify_claim.return_value = mock_report
+
+        headers = {"X-GitHub-Event": "pull_request"}
+        payload = {
+            "action": "opened",
+            "pull_request": {
+                "number": 42,
+                "title": "Fix sql injection",
+                "body": "This PR sanitizes user input",
+            },
+            "repository": {
+                "clone_url": "https://github.com/owner/repo.git",
+            },
+        }
+        response = self.client.post("/github/webhook", json=payload, headers=headers)
+        self.assertEqual(response.status_code, 200)
+        res_data = response.json()
+        self.assertEqual(res_data["status"], "verification_completed")
+        self.assertEqual(res_data["pr_number"], "42")
+        self.assertEqual(res_data["verification_status"], "Likely True")
+        self.assertEqual(res_data["confidence_score"], 95.0)
 
     def test_github_webhook_pull_request_ignored_action(self) -> None:
         headers = {"X-GitHub-Event": "pull_request"}
