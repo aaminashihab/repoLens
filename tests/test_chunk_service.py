@@ -35,7 +35,7 @@ class ChunkServiceTests(unittest.TestCase):
                 (ignored_path / "ignored.py").write_text("def ignored(): pass\n", encoding="utf-8")
 
             with patch.object(logger, "info") as log_info:
-                chunks = ChunkService().index_repository(repository)
+                chunks, graph = ChunkService().index_repository(repository)
 
         by_name = {chunk.symbol_name: chunk for chunk in chunks}
         self.assertEqual(set(by_name), {"top_level", "Greeter", "greet", "format_name"})

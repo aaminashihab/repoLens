@@ -1,4 +1,6 @@
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -21,9 +23,22 @@ class JobService:
         if error is not None:
             data["error"] = error
         
-        temporary_job_file = job_file.with_suffix(".json.tmp")
-        temporary_job_file.write_text(json.dumps(data), encoding="utf-8")
-        temporary_job_file.replace(job_file)
+        # BUG-NEW-4 FIX: Use a cryptographically unique temp file per write to
+        # prevent race conditions when concurrent threads update the same job.
+        # os.replace() is atomic on POSIX and Windows (same drive).
+        try:
+            fd, tmp_path = tempfile.mkstemp(
+                dir=self._storage_path, prefix=f"{job_id}_", suffix=".json.tmp"
+            )
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(data, f)
+            except Exception:
+                os.unlink(tmp_path)
+                raise
+            os.replace(tmp_path, job_file)
+        except Exception:
+            raise
 
     def get_job_status(self, job_id: str) -> dict[str, Any] | None:
         self._validate_job_id(job_id)

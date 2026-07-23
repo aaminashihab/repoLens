@@ -45,44 +45,109 @@ def _run_indexing_job(
     github_token: str | None = None,
 ) -> None:
     started_at = perf_counter()
+    logger.info(
+        "Starting repository indexing job",
+        extra={"index_id": index_id, "repo_url": repo_url},
+    )
+
     try:
         with repository_service.clone_repository_context(repo_url, github_token=github_token) as repository_path:
+            logger.info(
+                "Repository cloned successfully",
+                extra={"index_id": index_id, "clone_path": str(repository_path)},
+            )
             try:
-                chunks = chunk_service.index_repository(repository_path)
+                chunks, graph = chunk_service.index_repository(repository_path)
             except RepositoryChunkError as exc:
-                logger.error(f"Failed to chunk repository: {exc}")
+                logger.error(
+                    f"Failed to chunk repository: {exc}",
+                    extra={"index_id": index_id, "repo_url": repo_url},
+                    exc_info=True,
+                )
                 job_service.update_job_status(index_id, "failed", str(exc))
                 return
     except RepositoryCloneError as exc:
-        logger.error(f"Failed to clone repository: {exc}")
+        logger.error(
+            f"Failed to clone repository: {exc}",
+            extra={"index_id": index_id, "repo_url": repo_url},
+            exc_info=True,
+        )
         job_service.update_job_status(index_id, "failed", str(exc))
         return
+    except Exception as exc:
+        logger.error(
+            f"Unexpected repository cloning failure: {exc}",
+            extra={"index_id": index_id, "repo_url": repo_url},
+            exc_info=True,
+        )
+        job_service.update_job_status(index_id, "failed", f"Clone error: {exc}")
+        return
+
+    if not chunks:
+        msg = "Repository indexing failed: 0 code chunks were extracted."
+        logger.error(msg, extra={"index_id": index_id, "repo_url": repo_url})
+        job_service.update_job_status(index_id, "failed", msg)
+        return
+
+    logger.info(
+        "Chunks extracted from repository",
+        extra={
+            "index_id": index_id,
+            "chunks_count": len(chunks),
+            "graph_nodes_count": len(graph.nodes),
+        },
+    )
 
     try:
         embedded_chunks = embedding_service.embed_chunks(chunks)
+        if not embedded_chunks:
+            msg = "Repository indexing failed: 0 chunk embeddings were created."
+            logger.error(msg, extra={"index_id": index_id, "repo_url": repo_url})
+            job_service.update_job_status(index_id, "failed", msg)
+            return
+
+        logger.info(
+            "Chunk embeddings created",
+            extra={
+                "index_id": index_id,
+                "embedded_chunks_count": len(embedded_chunks),
+            },
+        )
+
         index_service.build_index(
             index_id,
             embedded_chunks,
             repo_url=repo_url,
             dimension=embedding_service.embedding_dimension,
+            graph=graph,
         )
     except (EmbeddingServiceError, IndexServiceError) as exc:
-        logger.error(f"Failed to build index: {exc}", exc_info=True)
+        logger.error(
+            f"Failed to build index: {exc}",
+            extra={"index_id": index_id, "repo_url": repo_url},
+            exc_info=True,
+        )
         job_service.update_job_status(index_id, "failed", str(exc))
         return
     except Exception as exc:
-        logger.error(f"Unexpected error during indexing: {exc}", exc_info=True)
+        logger.error(
+            f"Unexpected error during embedding/indexing: {exc}",
+            extra={"index_id": index_id, "repo_url": repo_url},
+            exc_info=True,
+        )
         job_service.update_job_status(index_id, "failed", f"Unexpected error: {exc}")
         return
 
+    # Mark completed ONLY after chunks, embeddings, and FAISS index persistence succeed
     job_service.update_job_status(index_id, "completed")
 
     logger.info(
-        "Repository indexing completed",
+        "Repository indexing completed successfully",
         extra={
             "index_id": index_id,
-            "repository_path": str(repository_path),
+            "repo_url": repo_url,
             "chunk_count": len(chunks),
+            "embedded_count": len(embedded_chunks),
             "total_indexing_time_seconds": perf_counter() - started_at,
         },
     )

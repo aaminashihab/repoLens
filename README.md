@@ -1,223 +1,228 @@
-#  RepoLens
+# RepoLens — Evidence-Based Repository Verification Platform
 
-**Ask questions about any GitHub repository in plain English — and get answers grounded in the actual code, with citations.**
+> **"Don't explain code. Verify claims about code."**
 
-RepoLens clones a public (or private, with a token) GitHub repository, parses it with `tree-sitter`, embeds each function/class as a vector, and answers natural-language questions using retrieval-augmented generation over your own OpenAI or Gemini key. Answers stream back token-by-token with the exact file paths and symbols they're grounded in.
+RepoLens is an **Evidence-Based Repository Verification Platform** designed to audit, test, and verify technical claims about codebases using hybrid vector search, AST call-graph traversal, multi-agent LLM-as-Judge reasoning, and automated guardrail validation.
 
-![RepoLens](static/repolens_logo.png)
+Unlike conventional chat assistants that explain code or summarize files, RepoLens verifies concrete claims (e.g., *"Does this authentication implementation prevent privilege escalation?"*, *"Does PR #42 fix Issue #101 without regressions?"*, *"Is SQL injection possible on search endpoints?"*) and produces structured, line-level cited **Verification Reports**.
 
-##  Video Demo
+![RepoLens Architecture](static/repolens_logo.png)
 
-Watch the walkthrough on YouTube: [RepoLens Walkthrough Demo](https://youtu.be/FW6FTw5s348)
-
-
-[![Tests](https://img.shields.io/badge/tests-34%20passing-brightgreen)](#testing)
+[![Tests](https://img.shields.io/badge/tests-60%20passing-brightgreen)](#testing)
 [![Python](https://img.shields.io/badge/python-3.12-blue)](#tech-stack)
 [![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688)](#tech-stack)
 [![CI](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml/badge.svg)](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml)
 
 ---
 
-## Why this project exists
+## Key Features
 
-Most "chat with your codebase" demos stop at "clone repo → embed → answer." RepoLens went a step further: it's been through several rounds of adversarial code review, and that process is documented rather than hidden. A few things that came out of it:
+- **Evidence-Driven Claim Verification**: Answers queries by validating claims against code snippets with zero un-cited assertions.
+- **Hybrid Vector + AST Call-Graph Retrieval**: Combines FAISS vector similarity search with $N$-hop graph traversal to inspect dependent function callers and callees.
+- **Multi-Agent LLM-as-Judge Pipeline**: Deconstructs user claims into testable atomic hypotheses, evaluates evidence, and outputs structured verdict reports.
+- **Guardrail Validation & Refusal Framework**: Automatically downgrades verification status to `Uncertain` if evidence completeness falls below threshold or if cited code references are invalid.
+- **Security Hardening**: Built-in protection against symlink attacks, path traversal, zip-bombs (50 MB total limit), oversized file denial-of-service (512 KB per-file limit), and binary file injection.
+- **Input Validation & Prompt Injection Defense**: Rejects conversational chatbot prompts ("What does this code do?") and guides users to submit testable engineering claims.
+- **GitHub Webhook Integration**: Automated verification triggers for Pull Requests and Issues via `POST /github/webhook`.
+- **Benchmark Evaluation Framework (`RepoVerify-Bench`)**: Quantifies Precision, Recall, Hallucination Rate, Citation Accuracy, and Evidence Completeness.
+- **Deterministic-First Architecture**: Uses tree-sitter AST parsing and static call-graph filtering first to minimize LLM token usage and API quota costs.
 
-- **A subtle namespace-package bug that silently broke the entire test suite.** An empty `fastapi/` directory sitting at the repo root shadowed the real installed `fastapi` package, causing 474 pytest collection errors that had nothing to do with the actual code. Root-caused to Python treating the empty folder as an implicit namespace package.
-- **A path traversal vulnerability** in job/index status lookups, where a crafted ID could escape the intended storage directory — found, fixed, and covered with a regression test that catches both `/` and `\` separators (the fix initially missed the Windows-style backslash case on POSIX, which the test suite itself caught).
-- **A stored-XSS risk** in the frontend, where LLM-generated Markdown and repo-derived file/symbol names were being written straight to `innerHTML`. Fixed with `DOMPurify` sanitization at every render boundary.
-- **Frontend XSS consistency gaps** where secondary UI elements (such as repository URLs in list items and active header info) bypassed sanitization. Wrapped all remaining API-derived values in `DOMPurify` before injecting them into `innerHTML`.
-- **A credential-leak check most people skip**: when private-repo cloning was added, I explicitly verified that a failed `git clone` with a token embedded in the URL doesn't leak that token into application logs — GitPython redacts it in its own error formatting, but I didn't assume that; I tested it.
+### Adversarial Auditing & Security Hardening Highlights
 
+RepoLens underwent extensive security auditing and hardening:
 
-
----
-
-## Features
-
-- **Semantic code search** — vector embeddings (OpenAI or Gemini) + FAISS, so search understands what code *does*, not just keyword matches.
-- **Symbol-aware chunking** — `tree-sitter` parses Python source into functions/classes/methods rather than naive line-based splitting, so retrieved context is always a complete, meaningful unit.
-- **Streaming, cited answers (SSE)** — responses stream token-by-token and end with the exact file paths and symbol names the answer is grounded in.
-- **Multi-turn conversation memory** — follow-up questions carry the last 12 turns of context, both server- and client-side capped so cost stays predictable.
-- **Private repository support** — pass a GitHub token per-request or via `GITHUB_TOKEN`; the token is spliced into the clone URL only, excluded from API responses and job/index metadata, and never logged.
-- **API key auth + per-route rate limiting** — optional `X-API-Key` gate plus configurable request limits on indexing and asking, so a public deployment can't be used to burn your LLM quota.
-- **Index lifecycle management** — list, resume, delete, and auto-expire indexes on a TTL, both via a background sweep and an on-demand endpoint.
-- **Background job processing** — cloning, chunking, embedding, and indexing all run as a non-blocking background task with pollable status.
+- **Path Traversal Protection**: Enforced strict `resolve().relative_to(repo_root)` validation on all path operations to prevent crafted repository paths from reading host system files.
+- **Symlink Defense**: `os.walk` prunes directory and file symlinks to avoid symlink-based exfiltration.
+- **Stored-XSS Prevention**: DOMPurify sanitization applied at all frontend rendering boundaries (`innerHTML`) for repo metadata and LLM citations.
+- **Credential Protection**: Redacts API keys and tokens from application logs and error formatters.
 
 ---
 
-##  Architecture
+## Core Verification Architecture
 
 ```
-                POST /index-repository
-                        │
-                        ▼
-        ┌───────────────────────────────┐
-        │  1. Validate & clone (GitPython)│  →  temp dir, cleaned up after
-        └───────────────┬───────────────┘
-                        ▼
-        ┌───────────────────────────────┐
-        │  2. Chunk with tree-sitter      │  →  functions/classes as units
-        └───────────────┬───────────────┘
-                        ▼
-        ┌───────────────────────────────┐
-        │  3. Embed chunks (OpenAI/Gemini)│
-        └───────────────┬───────────────┘
-                        ▼
-        ┌───────────────────────────────┐
-        │  4. Build FAISS index + metadata│  →  storage/indexes/<id>/
-        └────────────────────────────────┘
-
-                POST /ask/stream
-                        │
-                        ▼
-        ┌───────────────────────────────┐
-        │  Embed question → FAISS search  │
-        └───────────────┬───────────────┘
-                        ▼
-        ┌───────────────────────────────┐
-        │  Grounded prompt + history      │  →  system + prior turns + context
-        └───────────────┬───────────────┘
-                        ▼
-        ┌───────────────────────────────┐
-        │  Stream answer + sources (SSE) │
-        └────────────────────────────────┘
+                 POST /verify (Claim Verification Request)
+                                    │
+                                    ▼
+       ┌────────────────────────────────────────────────────────┐
+       │ 1. Input Validation & Prompt Guardrails                 │
+       │    • Enforce Min Claim Length & Reject Chatbot Inputs  │
+       └────────────────────────────┬───────────────────────────┘
+                                    ▼
+       ┌────────────────────────────────────────────────────────┐
+       │ 2. Hybrid Retrieval & Security Filter                  │
+       │    • FAISS Dense Vector Similarity Search              │
+       │    • Tree-sitter AST $N$-Hop Call-Graph Expansion       │
+       │    • Semantic Similarity Threshold Filter (>=0.15)     │
+       └────────────────────────────┬───────────────────────────┘
+                                    ▼
+       ┌────────────────────────────────────────────────────────┐
+       │ 3. Multi-Agent LLM-as-Judge Inference                  │
+       │    • Atomic Hypotheses Extraction & Testing            │
+       │    • Supporting & Contradicting Evidence Citations     │
+       └────────────────────────────┬───────────────────────────┘
+                                    ▼
+       ┌────────────────────────────────────────────────────────┐
+       │ 4. Guardrail Validation & Refusal Engine               │
+       │    • Citation File Path Verification                   │
+       │    • Evidence Completeness Evaluation (Relative to Top-K)│
+       └────────────────────────────┬───────────────────────────┘
+                                    ▼
+                     Structured Verification Report
+                     (Status, Confidence %, Citations, Risks)
 ```
-
-Each stage is an isolated, independently-testable service (`CloneService`, `ChunkService`, `EmbeddingService`, `IndexService`, `RetrievalService`, `AskService`), wired together through FastAPI dependency injection.
 
 ---
 
-##  Tech Stack
+## Tech Stack
 
 | Layer | Choice |
 |---|---|
-| API framework | [FastAPI](https://fastapi.tiangolo.com/) |
-| Code parsing | [tree-sitter](https://tree-sitter.github.io/tree-sitter/) (Python grammar) |
-| Vector search | [FAISS](https://github.com/facebookresearch/faiss) (CPU, `IndexFlatL2`) |
-| Embeddings / chat | OpenAI or Google Gemini (`LLM_PROVIDER` switch) |
-| Repo access | [GitPython](https://gitpython.readthedocs.io/) |
-| Rate limiting | [slowapi](https://github.com/laurentS/slowapi) |
-| Frontend | Vanilla JS + `marked` + `DOMPurify` + `highlight.js` |
-| Testing | `pytest`, 34 tests covering every service and route |
+| **API Framework** | [FastAPI](https://fastapi.tiangolo.com/) |
+| **AST Code Parsing** | [tree-sitter](https://tree-sitter.github.io/tree-sitter/) (Python grammar) + Multi-language fallback chunker |
+| **Call Graph Engine** | In-memory Directed Graph (`RepositoryGraph`) |
+| **Vector Search** | [FAISS](https://github.com/facebookresearch/faiss) (CPU, `IndexFlatL2`) |
+| **LLM Reasoning & Embeddings** | OpenAI (`gpt-4o-mini`, `text-embedding-3-small`) or Google Gemini (`gemini-2.5-flash`, `text-embedding-004`) |
+| **Repo Cloning** | [GitPython](https://gitpython.readthedocs.io/) in isolated temporary workspace |
+| **Rate Limiting** | [slowapi](https://github.com/laurentS/slowapi) |
+| **Frontend UI** | Vanilla JS + Dark Glassmorphic Verification Inspector + Syntax Highlighting |
+| **Testing** | `pytest`, **60 passing unit & integration tests** |
 
 ---
 
-##  Quick Start
+## Security Hardening & Safe Execution
 
-### 1. Install
+RepoLens enforces strict security controls when parsing external GitHub repositories:
+
+- **Symlink Protection**: `os.walk` prunes and skips file/directory symlinks to prevent reading system files outside the temporary directory.
+- **Path Traversal Guard**: Every path is checked via `.resolve().relative_to(repo_root)` to ensure files remain strictly within the cloned root.
+- **Resource Limits**: Individual files are capped at **512 KB**; total repository byte budget is capped at **50 MB**.
+- **Binary Filtering**: Files containing null bytes (`b"\x00"`) are automatically skipped.
+- **Atomic Storage**: Job status updates use unique temporary file descriptors (`tempfile.mkstemp`) and `os.replace` to prevent race conditions during concurrent status polling.
+
+---
+
+## Quick Start
+
+### 1. Install Dependencies
 
 ```bash
-git clone https://github.com/<your-username>/repolens.git
-cd repolens
+git clone https://github.com/aaminashihab/repoLens.git
+cd repoLens
+python -m venv .venv
+.venv\Scripts\activate   # On Linux/macOS: source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. Configure
+### 2. Configure Environment
 
 Create a `.env` file in the project root:
 
 ```env
-# Choose one provider
-LLM_PROVIDER=openai            # or "gemini"
+# Choose provider ("openai" or "gemini")
+LLM_PROVIDER=openai
 OPENAI_API_KEY=sk-...
-# OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 # OPENAI_CHAT_MODEL=gpt-4o-mini
+# OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+
+# Or use Gemini
+# LLM_PROVIDER=gemini
 # GEMINI_API_KEY=...
+# GEMINI_CHAT_MODEL=gemini-2.5-flash
 
-# Optional — leave unset for open local dev
-API_KEY=                       # gates all endpoints with X-API-Key if set
-GITHUB_TOKEN=                  # default token for private-repo cloning
-
-# Optional — rate limits (defaults shown)
+# Optional Security API Key & Webhook limits
+API_KEY=                       # Gate endpoints with X-API-Key
+VERIFY_RATE_LIMIT=30/minute
 INDEX_RATE_LIMIT=10/hour
-ASK_RATE_LIMIT=30/minute
-
-# Optional — index lifecycle (defaults shown)
-INDEX_TTL_HOURS=168             # 0 disables automatic + manual expiry
-INDEX_CLEANUP_INTERVAL_MINUTES=60
 ```
 
-### 3. Run
+### 3. Run Server
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-Open `http://localhost:8000` for the UI, or use the API directly (below).
+Open `http://localhost:8000` to view the Evidence Verification Platform UI.
 
 ---
 
-##  API Reference
+## API Reference
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/index-repository` | Start indexing a repo (`repo_url`, optional `github_token`) — returns `index_id` immediately |
-| `GET` | `/index-repository/{index_id}` | Poll job status: `processing` / `completed` / `failed` |
-| `DELETE` | `/index-repository/{index_id}` | Delete an index and its job record |
-| `GET` | `/indexes` | List all indexed repositories |
-| `POST` | `/indexes/cleanup` | Immediately expire indexes older than `INDEX_TTL_HOURS` |
-| `POST` | `/ask` | Ask a question, get a single JSON response with sources |
-| `POST` | `/ask/stream` | Ask a question, get an SSE token stream + sources |
+| `POST` | `/verify` | Execute verification pipeline for a claim against an indexed repo |
+| `POST` | `/github/webhook` | Process incoming GitHub PR and Issue webhooks for automated verification |
+| `POST` | `/index-repository` | Index a public/private GitHub repository (`repo_url`) |
+| `GET` | `/index-repository/{index_id}` | Poll background indexing job status |
+| `DELETE` | `/index-repository/{index_id}` | Delete repository index and metadata |
+| `GET` | `/indexes` | List all available repository indexes |
+| `POST` | `/ask/stream` | Stream repository context & Q&A via SSE events |
 
-All routes accept an `X-API-Key` header if `API_KEY` is configured.
+### Example Verification Request
 
-**Index a repository:**
 ```bash
-curl -X POST http://localhost:8000/index-repository \
+curl -X POST http://localhost:8000/verify \
   -H "Content-Type: application/json" \
-  -d '{"repo_url": "https://github.com/fastapi/fastapi"}'
-# → {"index_id": "uuid-here", "status": "processing"}
-```
-
-**Ask a question (streaming, with conversation history):**
-```bash
-curl -N -X POST http://localhost:8000/ask/stream \
-  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key" \
   -d '{
-        "index_id": "<index_id>",
-        "question": "How are API routes handled?",
-        "history": [
-          {"role": "user", "content": "What does this project do?"},
-          {"role": "assistant", "content": "It indexes and answers questions about a codebase."}
-        ]
+        "index_id": "example-index-id",
+        "claim": "Does this authentication implementation prevent privilege escalation?"
       }'
 ```
-```text
-event: start
-data: {"index_id": "uuid"}
 
-event: token
-data: {"text": "API "}
+### Example Verification Response
 
-event: sources
-data: [{"file_path": "app/main.py", "symbol_name": "app", "score": 0.89}]
-
-event: done
-data: {}
+```json
+{
+  "claim": "Does this authentication implementation prevent privilege escalation?",
+  "verification_status": "Likely True",
+  "confidence_score": 92.4,
+  "atomic_hypotheses": [
+    {
+      "hypothesis_id": "H1",
+      "statement": "Middleware checks user role against required authorization before execution",
+      "status": "VERIFIED"
+    }
+  ],
+  "supporting_evidence": [
+    {
+      "file_path": "app/api/dependencies.py",
+      "line_range": "L17-L23",
+      "symbol_name": "require_api_key",
+      "snippet": "async def require_api_key(x_api_key: str | None = Header(None, alias=\"X-API-Key\")) -> None:",
+      "relevance": "Checks incoming API header against configured key and raises 401 on failure."
+    }
+  ],
+  "potential_risks": [],
+  "missing_information": [],
+  "recommended_tests": []
+}
 ```
 
 ---
 
-##  Testing
+## Testing & Quality Assurance
+
+Run the comprehensive 60-test suite:
 
 ```bash
-pytest tests/
+$env:PYTHONPATH="."; .venv\Scripts\pytest
 ```
 
-34 tests cover every service (cloning, chunking, embedding, indexing, retrieval, jobs) and every route, including negative cases: path traversal attempts, invalid IDs, auth rejection, rate-limit trips, and TTL edge cases (e.g. `INDEX_TTL_HOURS=0` must disable expiry on *both* the scheduled sweep and the manual cleanup endpoint — a distinction the test suite specifically pins down after it was initially missed on one of the two code paths).
+```text
+======================== 60 passed, 1 warning in 14.20s ========================
+```
+
+The test suite pins down:
+- AST call graph node & edge construction (`test_graph.py`).
+- Refusal logic on low completeness or missing supporting evidence (`test_verification.py`).
+- Verification service orchestration and LLM fallback modes (`test_verification_service.py`).
+- Benchmark metrics precision, recall, and hallucination rate evaluation (`test_evaluator.py`).
+- `/verify` and `/github/webhook` route responses and status mappings (`test_verify_route.py`, `test_github_route.py`).
 
 ---
 
-##  What I'd build next
+## License & Contributing
 
-- **Multi-language chunking** — `tree-sitter` grammars exist for JS/TS, Go, Rust; currently hardcoded to Python.
-- **Incremental re-indexing** — diff against the last indexed commit SHA instead of re-embedding the whole repo on every update.
-- **Integration tests at the route level** — current tests hit services directly plus a handful of route tests; a full `TestClient`-based suite would catch cross-cutting regressions (like the original `fastapi/` shadowing bug) even earlier.
-- **A proper frontend rebuild in React** — the current vanilla JS UI works, but state (chat history, index list, active index) is manually synced across DOM updates; a component-based rewrite would make it much easier to extend.
-
----
-
-##  License & Contributing
-
-- **License:** This project is licensed under the [MIT License](LICENSE).
-- **Contributing:** Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to get started.
+- **License:** MIT License ([LICENSE](LICENSE))
+- **Contributing:** Guidelines available in [CONTRIBUTING.md](CONTRIBUTING.md).

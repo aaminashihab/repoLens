@@ -10,6 +10,7 @@ from app.services.embedding_service import EmbeddingService
 from app.services.index_service import IndexService
 from app.services.job_service import JobService
 from app.services.retrieval_service import RetrievalService
+from app.services.verification_service import VerificationService
 
 API_KEY = os.getenv("API_KEY")
 limiter = Limiter(key_func=get_remote_address)
@@ -43,7 +44,15 @@ def get_retrieval_service() -> RetrievalService:
         embedding_service=get_embedding_service(),
     )
 
+
 def get_ask_service() -> AskService:
     return AskService(
         retrieval_service=get_retrieval_service()
     )
+
+def get_verification_service() -> VerificationService:
+    return VerificationService(
+        retrieval_service=get_retrieval_service()
+    )
+
+
