@@ -8,7 +8,7 @@ Unlike conventional chat assistants that explain code or summarize files, RepoLe
 
 ![RepoLens Architecture](static/repolens_logo.png)
 
-[![Tests](https://img.shields.io/badge/tests-60%20passing-brightgreen)](#testing)
+[![Tests](https://img.shields.io/badge/tests-65%20passing-brightgreen)](#testing--quality-assurance)
 [![Python](https://img.shields.io/badge/python-3.12-blue)](#tech-stack)
 [![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688)](#tech-stack)
 [![CI](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml/badge.svg)](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml)
@@ -21,20 +21,11 @@ Unlike conventional chat assistants that explain code or summarize files, RepoLe
 - **Hybrid Vector + AST Call-Graph Retrieval**: Combines FAISS vector similarity search with $N$-hop graph traversal to inspect dependent function callers and callees.
 - **Multi-Agent LLM-as-Judge Pipeline**: Deconstructs user claims into testable atomic hypotheses, evaluates evidence, and outputs structured verdict reports.
 - **Guardrail Validation & Refusal Framework**: Automatically downgrades verification status to `Uncertain` if evidence completeness falls below threshold or if cited code references are invalid.
-- **Security Hardening**: Built-in protection against symlink attacks, path traversal, zip-bombs (50 MB total limit), oversized file denial-of-service (512 KB per-file limit), and binary file injection.
-- **Input Validation & Prompt Injection Defense**: Rejects conversational chatbot prompts ("What does this code do?") and guides users to submit testable engineering claims.
-- **GitHub Webhook Integration**: Automated verification triggers for Pull Requests and Issues via `POST /github/webhook`.
+- **Automated GitHub Webhook Pipeline**: Full verification execution on incoming Pull Requests (`opened`, `synchronize`) and Issues (`opened`) via `POST /github/webhook`.
+- **Security Hardening**: Built-in protection against symlink attacks, path traversal, zip-bombs (50 MB total limit with instant early exit), oversized file denial-of-service (512 KB per-file limit), and binary file injection.
+- **Input Validation & Smart Claim Filtering**: Allows technical questions referencing code concepts while filtering out non-technical meta-chatbot prompts.
 - **Benchmark Evaluation Framework (`RepoVerify-Bench`)**: Quantifies Precision, Recall, Hallucination Rate, Citation Accuracy, and Evidence Completeness.
 - **Deterministic-First Architecture**: Uses tree-sitter AST parsing and static call-graph filtering first to minimize LLM token usage and API quota costs.
-
-### Adversarial Auditing & Security Hardening Highlights
-
-RepoLens underwent extensive security auditing and hardening:
-
-- **Path Traversal Protection**: Enforced strict `resolve().relative_to(repo_root)` validation on all path operations to prevent crafted repository paths from reading host system files.
-- **Symlink Defense**: `os.walk` prunes directory and file symlinks to avoid symlink-based exfiltration.
-- **Stored-XSS Prevention**: DOMPurify sanitization applied at all frontend rendering boundaries (`innerHTML`) for repo metadata and LLM citations.
-- **Credential Protection**: Redacts API keys and tokens from application logs and error formatters.
 
 ---
 
@@ -46,7 +37,7 @@ RepoLens underwent extensive security auditing and hardening:
                                     ▼
        ┌────────────────────────────────────────────────────────┐
        │ 1. Input Validation & Prompt Guardrails                 │
-       │    • Enforce Min Claim Length & Reject Chatbot Inputs  │
+       │    • Enforce Min Claim Length & Technical Term Checks  │
        └────────────────────────────┬───────────────────────────┘
                                     ▼
        ┌────────────────────────────────────────────────────────┐
@@ -86,19 +77,21 @@ RepoLens underwent extensive security auditing and hardening:
 | **Repo Cloning** | [GitPython](https://gitpython.readthedocs.io/) in isolated temporary workspace |
 | **Rate Limiting** | [slowapi](https://github.com/laurentS/slowapi) |
 | **Frontend UI** | Vanilla JS + Dark Glassmorphic Verification Inspector + Syntax Highlighting |
-| **Testing** | `pytest`, **60 passing unit & integration tests** |
+| **Testing** | `pytest`, **65 passing unit & integration tests** |
 
 ---
 
 ## Security Hardening & Safe Execution
 
-RepoLens enforces strict security controls when parsing external GitHub repositories:
+RepoLens enforces strict security controls across the application layer:
 
-- **Symlink Protection**: `os.walk` prunes and skips file/directory symlinks to prevent reading system files outside the temporary directory.
-- **Path Traversal Guard**: Every path is checked via `.resolve().relative_to(repo_root)` to ensure files remain strictly within the cloned root.
-- **Resource Limits**: Individual files are capped at **512 KB**; total repository byte budget is capped at **50 MB**.
-- **Binary Filtering**: Files containing null bytes (`b"\x00"`) are automatically skipped.
-- **Atomic Storage**: Job status updates use unique temporary file descriptors (`tempfile.mkstemp`) and `os.replace` to prevent race conditions during concurrent status polling.
+- **Webhook HMAC Authentication**: `POST /github/webhook` verifies incoming payload signatures against `GITHUB_WEBHOOK_SECRET` using `hmac.compare_digest` with HMAC-SHA256.
+- **Timing-Safe Key Comparisons**: `X-API-Key` verification uses constant-time `hmac.compare_digest` to eliminate timing side-channel leaks.
+- **Credential Redaction**: Tokens and API keys are automatically stripped from Git error tracebacks and application logs before formatting.
+- **Log Injection Defense**: Structured logging avoids f-string interpolation of user-controlled inputs, passing variables safely via `extra={}` fields.
+- **Restrictive CORS Defaults**: CORS defaults to local origins (`localhost:8000`) with `allow_credentials=False` to prevent cross-origin credential reflection on header-gated endpoints.
+- **Symlink & Path Traversal Guards**: `os.walk` prunes directory/file symlinks, and path operations enforce `.resolve().relative_to(repo_root)` validation.
+- **Resource Budgeting**: Files are capped at **512 KB**; cumulative repository byte scans halt immediately at **50 MB**.
 
 ---
 
@@ -130,10 +123,12 @@ OPENAI_API_KEY=sk-...
 # GEMINI_API_KEY=...
 # GEMINI_CHAT_MODEL=gemini-2.5-flash
 
-# Optional Security API Key & Webhook limits
-API_KEY=                       # Gate endpoints with X-API-Key
+# Security & Webhooks
+API_KEY=                        # Gate endpoints with X-API-Key
+GITHUB_WEBHOOK_SECRET=          # HMAC secret for GitHub webhooks
 VERIFY_RATE_LIMIT=30/minute
 INDEX_RATE_LIMIT=10/hour
+GITHUB_RATE_LIMIT=30/minute
 ```
 
 ### 3. Run Server
@@ -151,74 +146,57 @@ Open `http://localhost:8000` to view the Evidence Verification Platform UI.
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/verify` | Execute verification pipeline for a claim against an indexed repo |
-| `POST` | `/github/webhook` | Process incoming GitHub PR and Issue webhooks for automated verification |
+| `POST` | `/github/webhook` | Process incoming GitHub PR & Issue webhooks and run automated verification |
 | `POST` | `/index-repository` | Index a public/private GitHub repository (`repo_url`) |
 | `GET` | `/index-repository/{index_id}` | Poll background indexing job status |
 | `DELETE` | `/index-repository/{index_id}` | Delete repository index and metadata |
 | `GET` | `/indexes` | List all available repository indexes |
 | `POST` | `/ask/stream` | Stream repository context & Q&A via SSE events |
 
-### Example Verification Request
-
-```bash
-curl -X POST http://localhost:8000/verify \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: your-api-key" \
-  -d '{
-        "index_id": "example-index-id",
-        "claim": "Does this authentication implementation prevent privilege escalation?"
-      }'
-```
-
-### Example Verification Response
+### Example Automated Webhook Response (PR Opened)
 
 ```json
 {
-  "claim": "Does this authentication implementation prevent privilege escalation?",
+  "status": "verification_completed",
+  "pr_number": "42",
+  "index_id": "idx-123",
   "verification_status": "Likely True",
-  "confidence_score": 92.4,
-  "atomic_hypotheses": [
-    {
-      "hypothesis_id": "H1",
-      "statement": "Middleware checks user role against required authorization before execution",
-      "status": "VERIFIED"
-    }
-  ],
-  "supporting_evidence": [
-    {
-      "file_path": "app/api/dependencies.py",
-      "line_range": "L17-L23",
-      "symbol_name": "require_api_key",
-      "snippet": "async def require_api_key(x_api_key: str | None = Header(None, alias=\"X-API-Key\")) -> None:",
-      "relevance": "Checks incoming API header against configured key and raises 401 on failure."
-    }
-  ],
-  "potential_risks": [],
-  "missing_information": [],
-  "recommended_tests": []
+  "confidence_score": 95.0,
+  "supporting_evidence_count": 3
 }
 ```
 
 ---
 
+## Production Reliability & Ops Roadmap (v2)
+
+While the core application layer, security guardrails, and verification pipeline are fully tested and functional, deploying RepoLens to multi-instance cloud environments (GKE / Cloud Run / ECS) involves the following infrastructure steps:
+
+1. **Distributed Vector & Job Persistence**: Transition FAISS `IndexFlatL2` and disk-based storage (`storage/jobs`) to **pgvector / Qdrant** and **Redis / Postgres** for multi-node scalability.
+2. **Observability & Telemetry**: Integrate **Prometheus metrics** and **OpenTelemetry tracing** for tracking embedding API latencies, vector retrieval scores, and token consumption.
+3. **LLM Resiliency & Circuit Breakers**: Implement exponential backoff retry policies and graceful degradation to lighter models during upstream LLM rate-limiting spikes.
+4. **Fine-Grained GitHub App Authentication**: Replace personal access tokens with **GitHub App Installation Tokens** scoping permissions strictly to read repo contents and post PR review comments.
+
+---
+
 ## Testing & Quality Assurance
 
-Run the comprehensive 60-test suite:
+Run the full 65-test suite:
 
 ```bash
 $env:PYTHONPATH="."; .venv\Scripts\pytest
 ```
 
 ```text
-======================== 60 passed, 1 warning in 14.20s ========================
+======================== 65 passed, 1 warning in 14.31s ========================
 ```
 
-The test suite pins down:
-- AST call graph node & edge construction (`test_graph.py`).
-- Refusal logic on low completeness or missing supporting evidence (`test_verification.py`).
-- Verification service orchestration and LLM fallback modes (`test_verification_service.py`).
-- Benchmark metrics precision, recall, and hallucination rate evaluation (`test_evaluator.py`).
-- `/verify` and `/github/webhook` route responses and status mappings (`test_verify_route.py`, `test_github_route.py`).
+The test suite covers:
+- Webhook HMAC signature verification and rate limiting (`test_github_route.py`).
+- AST call graph construction and $N$-hop traversal (`test_graph.py`).
+- Guardrail refusal logic and completeness validation (`test_verification.py`).
+- API key constant-time comparison and route authentication (`test_verify_route.py`).
+- Benchmark precision, recall, and citation accuracy (`test_evaluator.py`).
 
 ---
 
