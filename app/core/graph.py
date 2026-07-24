@@ -78,16 +78,13 @@ class RepositoryGraph:
         caller_ids = [src for src, rel in incoming if rel == "calls"]
         return [self.nodes[cid] for cid in caller_ids if cid in self.nodes]
 
-    def traverse_n_hops(self, start_node_ids: list[str], max_depth: int = 2) -> list[CodeNode]:
-        """Traverse outbound and inbound relations up to `max_depth` hops.
-
-        Note: Seed nodes ARE included in results. Deduplication against FAISS
-        vector search results is handled upstream in retrieval_service.py via seen_keys.
-        """
+    def traverse_n_hops_with_depth(
+        self, start_node_ids: list[str], max_depth: int = 2
+    ) -> list[tuple[CodeNode, int]]:
+        """Traverse outbound and inbound relations up to `max_depth` hops, returning (node, depth)."""
         visited: set[str] = set()
         queue: list[tuple[str, int]] = [(nid, 0) for nid in start_node_ids if nid in self.nodes]
-
-        result_nodes: list[CodeNode] = []
+        result: list[tuple[CodeNode, int]] = []
 
         while queue:
             curr_id, depth = queue.pop(0)
@@ -95,7 +92,7 @@ class RepositoryGraph:
                 continue
             visited.add(curr_id)
             if curr_id in self.nodes:
-                result_nodes.append(self.nodes[curr_id])
+                result.append((self.nodes[curr_id], depth))
 
             if depth < max_depth:
                 out_neighbors = [t for t, _ in self._adjacency_out.get(curr_id, [])]
@@ -104,7 +101,11 @@ class RepositoryGraph:
                     if nxt not in visited:
                         queue.append((nxt, depth + 1))
 
-        return result_nodes
+        return result
+
+    def traverse_n_hops(self, start_node_ids: list[str], max_depth: int = 2) -> list[CodeNode]:
+        """Traverse outbound and inbound relations up to `max_depth` hops."""
+        return [node for node, _ in self.traverse_n_hops_with_depth(start_node_ids, max_depth)]
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize graph to dictionary for storage."""

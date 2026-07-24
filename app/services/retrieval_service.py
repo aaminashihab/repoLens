@@ -122,18 +122,20 @@ class RetrievalService:
 
         # Graph N-hop expansion if hops > 0
         if hops > 0 and loaded_index.graph and seed_node_ids:
-            graph_nodes = loaded_index.graph.traverse_n_hops(seed_node_ids, max_depth=hops)
-            for gnode in graph_nodes:
+            graph_tuples = loaded_index.graph.traverse_n_hops_with_depth(seed_node_ids, max_depth=hops)
+            for gnode, depth in graph_tuples:
                 key = (gnode.file_path, gnode.symbol_name)
                 if key not in seen_keys:
                     seen_keys.add(key)
+                    # Hop decay: 1-hop direct neighbor gets 0.75, 2-hop gets 0.6375, 3-hop gets 0.5418
+                    hop_decay_score = max(0.20, round(0.75 * (0.85 ** max(0, depth - 1)), 4))
                     retrieved_chunks.append(
                         RetrievedChunk(
                             text=gnode.content,
                             file_path=gnode.file_path,
                             symbol_name=gnode.symbol_name,
                             chunk_type=gnode.symbol_type,
-                            similarity_score=0.75,  # Graph-connected context score
+                            similarity_score=hop_decay_score,
                             start_line=gnode.start_line,
                             end_line=gnode.end_line,
                         )

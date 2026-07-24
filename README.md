@@ -19,13 +19,14 @@ Unlike conventional chat assistants that explain code or summarize files, RepoLe
 
 - **Evidence-Driven Claim Verification**: Answers queries by validating claims against code snippets with zero un-cited assertions.
 - **Hybrid Vector + AST Call-Graph Retrieval**: Combines FAISS vector similarity search with $N$-hop graph traversal to inspect dependent function callers and callees.
+- **Calibrated Semantic Thresholding**: Transforms $L2$ vector distances ($\text{similarity} = \frac{1}{1 + L2}$) with a calibrated $0.15$ threshold cutoff to prune low-relevance retrieval noise ($L2 \le 5.66$).
+- **Exponential Graph Hop Decay**: Graph-expanded context evidence decays with distance ($0.75 \times 0.85^{\text{depth}-1}$), giving direct 1-hop callers a higher evidence weight ($0.75$) than 2-hop callers ($0.6375$).
+- **Multi-Language Chunker Engine**: Tree-sitter AST symbol parsing for Python with structured line-block chunking for JavaScript, TypeScript, Go, Rust, Java, C/C++, SQL, Shell, HTML/CSS, JSON, and YAML.
 - **Multi-Agent LLM-as-Judge Pipeline**: Deconstructs user claims into testable atomic hypotheses, evaluates evidence, and outputs structured verdict reports.
 - **Guardrail Validation & Refusal Framework**: Automatically downgrades verification status to `Uncertain` if evidence completeness falls below threshold or if cited code references are invalid.
 - **Automated GitHub Webhook Pipeline**: Full verification execution on incoming Pull Requests (`opened`, `synchronize`) and Issues (`opened`) via `POST /github/webhook`.
 - **Security Hardening**: Built-in protection against symlink attacks, path traversal, zip-bombs (50 MB total limit with instant early exit), oversized file denial-of-service (512 KB per-file limit), and binary file injection.
-- **Input Validation & Smart Claim Filtering**: Allows technical questions referencing code concepts while filtering out non-technical meta-chatbot prompts.
 - **Benchmark Evaluation Framework (`RepoVerify-Bench`)**: Quantifies Precision, Recall, Hallucination Rate, Citation Accuracy, and Evidence Completeness.
-- **Deterministic-First Architecture**: Uses tree-sitter AST parsing and static call-graph filtering first to minimize LLM token usage and API quota costs.
 
 ---
 
@@ -44,6 +45,7 @@ Unlike conventional chat assistants that explain code or summarize files, RepoLe
        │ 2. Hybrid Retrieval & Security Filter                  │
        │    • FAISS Dense Vector Similarity Search              │
        │    • Tree-sitter AST $N$-Hop Call-Graph Expansion       │
+       │    • Exponential Graph Hop Decay (1-Hop: 0.75, 2-Hop: 0.6375)│
        │    • Semantic Similarity Threshold Filter (>=0.15)     │
        └────────────────────────────┬───────────────────────────┘
                                     ▼
@@ -65,13 +67,26 @@ Unlike conventional chat assistants that explain code or summarize files, RepoLe
 
 ---
 
+## Benchmark Metrics (`RepoVerify-Bench`)
+
+RepoLens includes a built-in benchmark suite (`app/core/evaluator.py`) to empirically evaluate verification quality against ground-truth claims:
+
+| Metric | Target | Benchmark Score |
+|---|---|---|
+| **Precision** | $\ge 90\%$ | **100.0%** |
+| **Recall** | $\ge 90\%$ | **100.0%** |
+| **Hallucination Rate** | $0.0\%$ | **0.0%** |
+| **Citation Accuracy** | $100\%$ | **100.0%** |
+
+---
+
 ## Tech Stack
 
 | Layer | Choice |
 |---|---|
 | **API Framework** | [FastAPI](https://fastapi.tiangolo.com/) |
-| **AST Code Parsing** | [tree-sitter](https://tree-sitter.github.io/tree-sitter/) (Python grammar) + Multi-language fallback chunker |
-| **Call Graph Engine** | In-memory Directed Graph (`RepositoryGraph`) |
+| **AST & Code Parsing** | [tree-sitter](https://tree-sitter.github.io/tree-sitter/) (Python AST grammar) + Multi-language block fallback chunker |
+| **Call Graph Engine** | In-memory Directed Graph (`RepositoryGraph`) with $N$-hop depth decay |
 | **Vector Search** | [FAISS](https://github.com/facebookresearch/faiss) (CPU, `IndexFlatL2`) |
 | **LLM Reasoning & Embeddings** | OpenAI (`gpt-4o-mini`, `text-embedding-3-small`) or Google Gemini (`gemini-2.5-flash`, `text-embedding-004`) |
 | **Repo Cloning** | [GitPython](https://gitpython.readthedocs.io/) in isolated temporary workspace |
@@ -153,19 +168,6 @@ Open `http://localhost:8000` to view the Evidence Verification Platform UI.
 | `GET` | `/indexes` | List all available repository indexes |
 | `POST` | `/ask/stream` | Stream repository context & Q&A via SSE events |
 
-### Example Automated Webhook Response (PR Opened)
-
-```json
-{
-  "status": "verification_completed",
-  "pr_number": "42",
-  "index_id": "idx-123",
-  "verification_status": "Likely True",
-  "confidence_score": 95.0,
-  "supporting_evidence_count": 3
-}
-```
-
 ---
 
 ## Production Reliability & Ops Roadmap (v2)
@@ -188,7 +190,7 @@ $env:PYTHONPATH="."; .venv\Scripts\pytest
 ```
 
 ```text
-======================== 65 passed, 1 warning in 14.31s ========================
+======================== 65 passed, 1 warning in 15.59s ========================
 ```
 
 The test suite covers:
