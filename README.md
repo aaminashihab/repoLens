@@ -200,7 +200,7 @@ curl -X POST http://localhost:8000/verify \
   "supporting_evidence": [
     {
       "file_path": "app/api/dependencies.py",
-      "line_range": "L18-L24",
+      "line_range": "L19-L25",
       "symbol_name": "require_api_key",
       "snippet": "async def require_api_key(x_api_key: str | None = Header(None, alias=\"X-API-Key\")) -> None:",
       "relevance": "Checks incoming API header against configured key and raises 401 on failure."
