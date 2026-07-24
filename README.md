@@ -4,7 +4,7 @@
 
 RepoLens is an **Evidence-Based Repository Verification Platform** designed to audit, test, and verify technical claims about codebases using hybrid vector search, AST call-graph traversal, multi-agent LLM-as-Judge reasoning, and automated guardrail validation.
 
-Unlike conventional chat assistants that explain code or summarize files, RepoLens verifies concrete claims (e.g., *"Does this authentication implementation prevent privilege escalation?"*, *"Does PR #42 fix Issue #101 without regressions?"*, *"Is SQL injection possible on search endpoints?"*) and produces structured, line-level cited **Verification Reports**.
+
 
 ![RepoLens Architecture](static/repolens_logo.png)
 
