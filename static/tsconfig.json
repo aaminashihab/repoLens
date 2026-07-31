@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "None",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "outFile": "app.js",
+    "rootDir": "src",
+    "removeComments": false,
+    "sourceMap": false,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts"]
+}

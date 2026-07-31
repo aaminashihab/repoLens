@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="RepoLens — Evidence-Based Repository Verification Platform. Verify specific technical claims about code with cited evidence.">
+  <title>RepoLens — Evidence Verification Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="app-container">
+
+    <!-- ── Sidebar ─────────────────────────────────────────────── -->
+    <aside class="sidebar glass" role="complementary" aria-label="Repository management">
+
+      <!-- Brand -->
+      <div class="sidebar-brand">
+        <div class="sidebar-brand__icon" aria-hidden="true">
+          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+        </div>
+        <div class="sidebar-brand__text">
+          <h1>RepoLens</h1>
+          <p>Evidence Verification Platform</p>
+        </div>
+      </div>
+
+      <!-- Index Repository -->
+      <div class="sidebar-section">
+        <p class="sidebar-section__label">
+          <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+          </svg>
+          Index Repository
+        </p>
+        <div class="input-row">
+          <input
+            type="url"
+            id="repo-url"
+            class="input-field"
+            placeholder="https://github.com/owner/repo"
+            aria-label="GitHub repository URL"
+            autocomplete="off"
+            spellcheck="false"
+          >
+          <button id="index-btn" class="btn btn-primary" aria-label="Start indexing">
+            Index
+          </button>
+        </div>
+        <div id="index-status" class="index-status" role="status" aria-live="polite">
+          <span id="index-spinner" class="mini-spinner" style="display:none"></span>
+          <span id="index-status-text"></span>
+        </div>
+      </div>
+
+      <!-- Available Indexes -->
+      <div class="sidebar-section" style="flex: 1; overflow: hidden; display: flex; flex-direction: column; gap: 0; padding-bottom: 0;">
+        <p class="sidebar-section__label" style="padding: 0 4px 6px;">
+          <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+          </svg>
+          Indexes
+        </p>
+        <div id="indexes-list" class="indexes-scroll" role="list" aria-label="Available indexes">
+          <div class="indexes-empty">
+            <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0H4" />
+            </svg>
+            <span>No indexes yet</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Current Index -->
+      <div class="sidebar-section">
+        <p class="sidebar-section__label">
+          <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          Active Index
+        </p>
+        <div id="current-index-display" class="current-index-display" aria-live="polite">
+          <span class="current-index__empty">No active index</span>
+        </div>
+      </div>
+
+      <!-- Settings / Connection -->
+      <div class="sidebar-settings">
+        <button
+          class="settings-toggle"
+          id="settings-toggle-btn"
+          aria-expanded="false"
+          aria-controls="settings-content"
+        >
+          <span class="settings-toggle__left">
+            <span id="health-dot" class="health-dot health-dot--checking" title="Checking connection…" aria-hidden="true"></span>
+            <span id="health-label" style="font-size:0.78rem;">Checking…</span>
+          </span>
+          <svg class="chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+        <div class="settings-content hidden" id="settings-content">
+          <div class="settings-row">
+            <span class="settings-row__label">Server status</span>
+            <span class="settings-row__val" id="health-status-detail">—</span>
+          </div>
+          <div class="settings-row" style="margin-top:8px; flex-direction:column; align-items:flex-start; gap:4px;">
+            <span class="settings-row__label">API Key (X-API-Key)</span>
+            <input type="password" id="api-key-input" class="input-field" placeholder="Optional X-API-Key..." style="font-size:0.75rem; padding:4px 8px; width:100%;" />
+          </div>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- ── Main Chat Area ──────────────────────────────────────── -->
+    <main class="chat-area glass" role="main" aria-label="Verification workspace">
+
+      <!-- Message History -->
+      <div class="chat-history" id="chat-history" role="log" aria-live="polite" aria-label="Verification history">
+      </div>
+
+      <!-- Input -->
+      <div class="chat-input-area">
+        <form class="chat-form" id="chat-form" role="search" aria-label="Claim verification input">
+          <div class="chat-input-wrapper">
+            <input
+              type="text"
+              id="chat-input"
+              class="chat-input-field"
+              placeholder="Select an index to verify claims…"
+              disabled
+              autocomplete="off"
+              spellcheck="false"
+              aria-label="Enter a claim to verify"
+            >
+          </div>
+          <button type="submit" id="send-btn" disabled aria-label="Verify claim">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="22" y1="2" x2="11" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          </button>
+        </form>
+        <p class="chat-meta">
+          <kbd>Ctrl</kbd><kbd>K</kbd> to focus · <kbd>Enter</kbd> to submit
+        </p>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ── Confirm Dialog ────────────────────────────────────────── -->
+  <div class="dialog-backdrop" id="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+    <div class="dialog">
+      <h2 class="dialog__title" id="dialog-title">Delete Index</h2>
+      <p class="dialog__body">Are you sure you want to delete this index? All indexed data will be permanently removed and cannot be recovered.</p>
+      <div class="dialog__actions">
+        <button id="dialog-cancel" class="btn-secondary">Cancel</button>
+        <button id="dialog-confirm" class="btn-danger">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Scripts ───────────────────────────────────────────────── -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
