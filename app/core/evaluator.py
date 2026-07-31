@@ -3,9 +3,12 @@
 import logging
 from dataclasses import dataclass
 from time import perf_counter
+from typing import TYPE_CHECKING, Any
 
 from app.models.verification import VerificationStatus
-from app.services.verification_service import VerificationService
+
+if TYPE_CHECKING:
+    from app.services.verification_service import VerificationService
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +43,7 @@ class EvaluationMetrics:
 class RepoVerifyEvaluator:
     """Evaluates a VerificationService instance against a benchmark suite."""
 
-    def __init__(self, verification_service: VerificationService) -> None:
+    def __init__(self, verification_service: "VerificationService | Any") -> None:
         self.service = verification_service
 
     def evaluate_benchmark(self, test_cases: list[BenchmarkTestCase]) -> EvaluationMetrics:
@@ -159,4 +162,11 @@ class RepoVerifyEvaluator:
             "hybrid_vector_graph": hybrid_metrics,
             "vector_only_baseline": vector_only_metrics,
         }
+
+
+if __name__ == "__main__":
+    from scripts.run_benchmark import run_benchmark_cli
+
+    run_benchmark_cli()
+
 

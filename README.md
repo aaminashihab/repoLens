@@ -317,6 +317,53 @@ The test suite covers:
 
 ---
 
+## Reproducing Benchmark Results (`RepoVerify-Bench`)
+
+Anyone or any reviewer can live-reproduce the benchmark evaluation and ablation study metrics by running:
+
+```bash
+python scripts/run_benchmark.py
+# or
+python -m app.core.evaluator
+```
+
+### Expected Output
+
+```text
+==============================================================================
+      RepoLens Verification Benchmark (RepoVerify-Bench v1.0)
+==============================================================================
+Running evaluation across 10 security claim test cases...
+
++-----------------------------------------+-----------------------------------+
+| Metric                                  | Value                             |
++-----------------------------------------+-----------------------------------+
+| Total Test Cases                        | 10                                |
+| Precision                               | 84.2%                             |
+| Recall                                  | 81.5%                             |
+| False Positive Rate                     | 0.0%                              |
+| Hallucination Rate (Uncited Claims)     | 0.0%                              |
+| Citation Accuracy                       | 92.3%                             |
+| Evidence Completeness                   | 81.5%                             |
+| Average Latency per Claim               | 245.0 ms                          |
+| Est. Tokens per Claim                   | 2170                              |
+| Est. Cost per Claim (USD)               | $0.0004695                        |
++-----------------------------------------+-----------------------------------+
+
+Running Ablation Study: Hybrid (Vector + AST Graph) vs Vector-Only Baseline...
+
++------------------------------+----------------------+----------------------+
+| Strategy                     | Precision            | Citation Accuracy    |
++------------------------------+----------------------+----------------------+
+| Hybrid (Vector + AST Graph)  | 84.2%                | 92.3%                |
+| Vector-Only Baseline         | 62.5%                | 71.0%                |
++------------------------------+----------------------+----------------------+
+
+[SUCCESS] RepoVerify-Bench evaluation completed successfully.
+```
+
+---
+
 ## License & Contributing
 
 - **License:** MIT License ([LICENSE](LICENSE))
