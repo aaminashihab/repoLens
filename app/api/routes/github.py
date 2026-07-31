@@ -8,7 +8,7 @@ from typing import Any
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request, status
 
-from app.api.dependencies import get_index_service, get_verification_service, limiter
+from app.api.dependencies import get_index_service, get_verification_service, limiter, require_api_key
 from app.services.index_service import IndexService
 from app.services.verification_service import VerificationService
 
@@ -19,7 +19,7 @@ def get_github_rate_limit() -> str:
     return GITHUB_RATE_LIMIT
 
 
-router = APIRouter(prefix="/github", tags=["github"])
+router = APIRouter(prefix="/github", tags=["github"], dependencies=[Depends(require_api_key)])
 logger = logging.getLogger(__name__)
 
 

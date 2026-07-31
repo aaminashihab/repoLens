@@ -191,14 +191,17 @@ Respond strictly in JSON matching this schema:
                 )
                 text_content = response.choices[0].message.content
 
-            json_start = text_content.find("{")
-            json_end = text_content.rfind("}")
-            if json_start != -1 and json_end != -1 and json_end > json_start:
-                text_content = text_content[json_start : json_end + 1]
-            elif text_content.startswith("```json"):
+            # Robust JSON extraction: check for markdown fences first (Gemini often wraps
+            # responses in ```json blocks), then fall back to outermost { } bracket search.
+            if text_content.startswith("```json"):
                 text_content = text_content.split("```json", 1)[1].rsplit("```", 1)[0].strip()
             elif text_content.startswith("```"):
                 text_content = text_content.split("```", 1)[1].rsplit("```", 1)[0].strip()
+            else:
+                json_start = text_content.find("{")
+                json_end = text_content.rfind("}")
+                if json_start != -1 and json_end != -1 and json_end > json_start:
+                    text_content = text_content[json_start : json_end + 1]
 
             parsed = json.loads(text_content)
             verdicts_by_id = {
