@@ -1,6 +1,7 @@
 """Evaluation framework and benchmark runner for repository verification (RepoVerify-Bench)."""
 
 import logging
+import os
 from dataclasses import dataclass
 from time import perf_counter
 from typing import TYPE_CHECKING, Any
@@ -118,9 +119,41 @@ class RepoVerifyEvaluator:
         completeness = avg_recall * 100.0
         avg_lat = sum(latencies) / len(latencies) if latencies else 0.0
 
-        # Estimated cost per claim (OpenAI gpt-4o-mini rates: $0.15/1M in, $0.60/1M out)
-        est_tokens = 2170
-        est_cost = (1850 * 0.00000015) + (320 * 0.00000060)
+        # ---------------------------------------------------------------------------
+        # Estimated cost per claim — derived from the actual configured model.
+        #
+        # Token counts are approximated from the fixed prompt template size:
+        #   ~1 850 input tokens  (system prompt + evidence context)
+        #   ~320  output tokens  (JSON verdict response)
+        #
+        # Pricing table (USD per token, as of 2025-Q3):
+        #   gpt-4o-mini       $0.15/1M in,  $0.60/1M out
+        #   gpt-4o            $2.50/1M in, $10.00/1M out
+        #   gemini-2.5-flash  $0.075/1M in, $0.30/1M out  (non-thinking)
+        #   gemini-2.5-pro    $1.25/1M in,  $5.00/1M out
+        # ---------------------------------------------------------------------------
+
+        _PRICING: dict[str, tuple[float, float]] = {
+            # model-name → (price_per_input_token, price_per_output_token)
+            "gpt-4o-mini": (0.15e-6, 0.60e-6),
+            "gpt-4o": (2.50e-6, 10.00e-6),
+            "gemini-2.5-flash": (0.075e-6, 0.30e-6),
+            "gemini-2.5-pro": (1.25e-6, 5.00e-6),
+            "gemini-2.0-flash": (0.10e-6, 0.40e-6),
+        }
+        _DEFAULT_PRICING = (0.15e-6, 0.60e-6)  # fall back to gpt-4o-mini rates
+
+        provider = os.getenv("LLM_PROVIDER", "openai").lower()
+        if provider == "gemini":
+            model_key = os.getenv("GEMINI_CHAT_MODEL", "gemini-2.5-flash")
+        else:
+            model_key = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
+
+        in_price, out_price = _PRICING.get(model_key, _DEFAULT_PRICING)
+        est_input_tokens = 1850
+        est_output_tokens = 320
+        est_tokens = est_input_tokens + est_output_tokens
+        est_cost = (est_input_tokens * in_price) + (est_output_tokens * out_price)
 
         return EvaluationMetrics(
             total_cases=total,

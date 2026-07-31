@@ -160,3 +160,50 @@ class EvaluatorTests(unittest.TestCase):
         self.assertEqual(results["hybrid_vector_graph"].total_cases, 1)
         self.assertEqual(results["vector_only_baseline"].total_cases, 1)
 
+    def test_cost_estimate_reflects_configured_model(self) -> None:
+        """Cost estimate must change depending on LLM_PROVIDER / model env vars."""
+        import os
+
+        service = Mock()
+        report = VerificationReport(
+            claim="Test",
+            verification_status=VerificationStatus.LIKELY_TRUE,
+            confidence_score=90.0,
+        )
+        service.verify_claim.return_value = report
+        evaluator = RepoVerifyEvaluator(service)
+        case = BenchmarkTestCase(
+            case_id="C1",
+            index_id="idx",
+            claim="Test",
+            ground_truth_status=VerificationStatus.LIKELY_TRUE,
+            expected_evidence_files=[],
+        )
+
+        # Default: OpenAI gpt-4o-mini
+        os.environ.pop("LLM_PROVIDER", None)
+        os.environ.pop("OPENAI_CHAT_MODEL", None)
+        metrics_mini = evaluator.evaluate_benchmark([case])
+
+        # Switch to gpt-4o (much more expensive)
+        os.environ["OPENAI_CHAT_MODEL"] = "gpt-4o"
+        metrics_4o = evaluator.evaluate_benchmark([case])
+        os.environ.pop("OPENAI_CHAT_MODEL", None)
+
+        # Switch to Gemini 2.5 Flash (cheaper than gpt-4o-mini)
+        os.environ["LLM_PROVIDER"] = "gemini"
+        os.environ["GEMINI_CHAT_MODEL"] = "gemini-2.5-flash"
+        metrics_gemini = evaluator.evaluate_benchmark([case])
+        os.environ.pop("LLM_PROVIDER", None)
+        os.environ.pop("GEMINI_CHAT_MODEL", None)
+
+        # gpt-4o must cost more than gpt-4o-mini
+        self.assertGreater(metrics_4o.estimated_cost_usd, metrics_mini.estimated_cost_usd)
+        # gemini-2.5-flash must cost less than gpt-4o-mini
+        self.assertLess(metrics_gemini.estimated_cost_usd, metrics_mini.estimated_cost_usd)
+        # Token count is constant across all models
+        self.assertEqual(metrics_mini.estimated_tokens_per_claim, 2170)
+        self.assertEqual(metrics_4o.estimated_tokens_per_claim, 2170)
+        self.assertEqual(metrics_gemini.estimated_tokens_per_claim, 2170)
+
+

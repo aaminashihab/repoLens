@@ -1,5 +1,6 @@
 """GitHub Pull Request & Issue Verification webhook handler."""
 
+import asyncio
 import hashlib
 import hmac
 import logging
@@ -99,7 +100,10 @@ async def github_webhook(
                 "Executing automated claim verification for PR",
                 extra={"pr_number": pr_number, "index_id": target_index, "claim": claim},
             )
-            report = service.verify_claim(
+            # verify_claim is a blocking synchronous LLM call; offload to a
+            # threadpool thread so this async handler never stalls the event loop.
+            report = await asyncio.to_thread(
+                service.verify_claim,
                 index_id=target_index,
                 claim=claim,
                 repository_url=repo_url,
@@ -130,7 +134,8 @@ async def github_webhook(
             target_index = _find_index_for_repo(repo_url, index_service)
             if target_index:
                 claim = f"Issue #{issue_number} '{title}' describes a bug or behavior present in the codebase: {body[:200]}"
-                report = service.verify_claim(
+                report = await asyncio.to_thread(
+                    service.verify_claim,
                     index_id=target_index,
                     claim=claim,
                     repository_url=repo_url,
