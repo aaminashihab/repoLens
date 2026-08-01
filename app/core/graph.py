@@ -44,7 +44,7 @@ class RepositoryGraph:
         # that repeated add_edge calls (e.g. from re-indexing or JS/TS walk
         # visiting the same call-site twice) are silently ignored instead of
         # producing duplicate edges that grow the list without bound.
-        self._edge_set: set[tuple[str, str, str]] = {}
+        self._edge_set: set[tuple[str, str, str]] = set()
 
     def add_node(self, node: CodeNode) -> None:
         """Add a CodeNode to the repository graph."""
