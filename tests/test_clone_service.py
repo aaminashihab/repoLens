@@ -7,6 +7,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 from git import GitError
 
+import app.api.dependencies as api_deps
 from app.main import app
 from app.services.clone_service import (
     CloneService,
@@ -103,6 +104,11 @@ class CloneServiceTests(unittest.TestCase):
 class RepositoryApiTests(unittest.TestCase):
     def setUp(self) -> None:
         self.client = TestClient(app)
+        self.orig_api_key = api_deps.API_KEY
+        api_deps.API_KEY = None
+
+    def tearDown(self) -> None:
+        api_deps.API_KEY = self.orig_api_key
 
     @patch("app.api.routes.repositories.BackgroundTasks.add_task")
     @patch("app.api.routes.repositories.CloneService.validate_github_url")

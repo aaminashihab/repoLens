@@ -9,6 +9,7 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
@@ -97,8 +98,6 @@ async def lifespan(app: FastAPI):
     from app.services.embedding_service import _EXECUTOR
     _EXECUTOR.shutdown(wait=True)
 
-
-from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
     title="RepoLens API",
