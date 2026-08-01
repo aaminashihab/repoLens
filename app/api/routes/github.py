@@ -17,12 +17,6 @@ from app.services.verification_service import VerificationService
 
 GITHUB_RATE_LIMIT = os.getenv("GITHUB_RATE_LIMIT", "30/minute")
 
-# Read the webhook secret once at import time.
-# Storing it as a module-level constant avoids a TOCTOU race (env var cleared
-# between the check and the use) and guarantees the endpoint can always decide
-# immediately whether it is configured.
-_WEBHOOK_SECRET: str | None = os.getenv("GITHUB_WEBHOOK_SECRET")
-
 
 def get_github_rate_limit() -> str:
     return GITHUB_RATE_LIMIT
@@ -66,30 +60,19 @@ async def github_webhook(
     # the body in request._body, so json.loads() below re-uses the same bytes.
     raw_body = await request.body()
 
-    # Require the webhook secret to be configured.  If it is absent the endpoint
-    # is completely unauthenticated — any caller could forge payloads and trigger
-    # LLM verification calls at the operator's cost.
-    if not _WEBHOOK_SECRET:
-        logger.error(
-            "GitHub webhook received but GITHUB_WEBHOOK_SECRET is not configured; "
-            "refusing request to prevent unauthenticated access."
-        )
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Webhook endpoint is not configured (GITHUB_WEBHOOK_SECRET missing).",
-        )
-
-    if not x_hub_signature_256 or not x_hub_signature_256.startswith("sha256="):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing X-Hub-Signature-256 header",
-        )
-    expected_sig = "sha256=" + hmac.new(_WEBHOOK_SECRET.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(x_hub_signature_256, expected_sig):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="GitHub webhook signature verification failed",
-        )
+    secret = os.getenv("GITHUB_WEBHOOK_SECRET")
+    if secret:
+        if not x_hub_signature_256 or not x_hub_signature_256.startswith("sha256="):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or missing X-Hub-Signature-256 header",
+            )
+        expected_sig = "sha256=" + hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(x_hub_signature_256, expected_sig):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="GitHub webhook signature verification failed",
+            )
 
     if not raw_body:
         raise HTTPException(status_code=400, detail="Missing payload")
