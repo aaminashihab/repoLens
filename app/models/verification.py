@@ -103,7 +103,7 @@ class VerificationRequest(BaseModel):
 
         # Reject pure non-technical meta-chatbot prompts
         for pattern in _PURE_CHATBOT_PATTERNS:
-            if pattern in lower:
+            if lower == pattern or lower.startswith(pattern + " ") or lower.startswith(pattern + "?"):
                 raise ValueError(
                     f"'{cleaned[:60]}...' looks like a general chatbot prompt, not a verifiable code claim. "
                     "RepoLens verifies specific engineering claims (e.g., 'The rate limiter uses Redis', "

@@ -1,6 +1,7 @@
 """In-memory Code Graph (Call Graph & Dependency Graph) built during AST chunking."""
 
 import logging
+from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
@@ -39,6 +40,11 @@ class RepositoryGraph:
         self._adjacency_out: dict[str, list[tuple[str, str]]] = {}  # source -> list of (target, relation_type)
         self._adjacency_in: dict[str, list[tuple[str, str]]] = {}   # target -> list of (source, relation_type)
         self._symbol_lookup: dict[str, list[str]] = {}             # symbol_name -> list of node_ids
+        # Tracks (source_id, target_id, relation_type) tuples already added so
+        # that repeated add_edge calls (e.g. from re-indexing or JS/TS walk
+        # visiting the same call-site twice) are silently ignored instead of
+        # producing duplicate edges that grow the list without bound.
+        self._edge_set: set[tuple[str, str, str]] = {}
 
     def add_node(self, node: CodeNode) -> None:
         """Add a CodeNode to the repository graph."""
@@ -51,7 +57,17 @@ class RepositoryGraph:
                 existing.append(node.node_id)
 
     def add_edge(self, source_id: str, target_id: str, relation_type: str) -> None:
-        """Add a directional relation edge between two nodes."""
+        """Add a directional relation edge between two nodes.
+
+        Duplicate edges (same source, target, and relation type) are silently
+        ignored. This prevents unbounded memory growth when the AST walker
+        visits the same call-site multiple times or when re-indexing runs on
+        an already-populated graph.
+        """
+        key = (source_id, target_id, relation_type)
+        if key in self._edge_set:
+            return
+        self._edge_set.add(key)
         edge = GraphEdge(source_id=source_id, target_id=target_id, relation_type=relation_type)
         self.edges.append(edge)
         self._adjacency_out.setdefault(source_id, []).append((target_id, relation_type))
@@ -83,11 +99,15 @@ class RepositoryGraph:
     ) -> list[tuple[CodeNode, int]]:
         """Traverse outbound and inbound relations up to `max_depth` hops, returning (node, depth)."""
         visited: set[str] = set()
-        queue: list[tuple[str, int]] = [(nid, 0) for nid in start_node_ids if nid in self.nodes]
+        # Use deque for O(1) popleft — list.pop(0) is O(n) and makes BFS O(n²)
+        # on large graphs (thousands of nodes from big repositories).
+        queue: deque[tuple[str, int]] = deque(
+            (nid, 0) for nid in start_node_ids if nid in self.nodes
+        )
         result: list[tuple[CodeNode, int]] = []
 
         while queue:
-            curr_id, depth = queue.pop(0)
+            curr_id, depth = queue.popleft()
             if curr_id in visited:
                 continue
             visited.add(curr_id)

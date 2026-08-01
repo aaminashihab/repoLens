@@ -29,6 +29,13 @@ class CloneService:
     _SUPPORTED_HOSTS = {"github.com", "www.github.com"}
     _GITHUB_PATH_PART = re.compile(r"^[A-Za-z0-9_.-]+$")
 
+    @staticmethod
+    def _redact(text: str, token: str | None) -> str:
+        """Replace every occurrence of *token* in *text* with '***'."""
+        if token and token in text:
+            return text.replace(token, "***")
+        return text
+
     def _authenticated_url(self, normalized_url: str, token: str | None) -> str:
         """Splice token@ right after https:// if a token is provided."""
         if token:
@@ -55,18 +62,25 @@ class CloneService:
         except (GitError, OSError) as exc:
             if working_directory is not None:
                 shutil.rmtree(working_directory, ignore_errors=True)
-            exc_str = str(exc)
-            if token:
-                exc_str = re.sub(re.escape(token), "***", exc_str)
+            # Redact the token from every string representation of the
+            # exception before it touches any log sink or is re-raised.
+            # We use a simple str.replace (not regex) so the token itself
+            # is never treated as a regex pattern.
+            exc_str = self._redact(str(exc), token)
             logger.error(
                 "Failed to clone GitHub repository: %s",
                 exc_str,
                 extra={"repo_url": normalized_url},
             )
+            # Raise with `from None` to suppress the original exception chain.
+            # The original exception has already been logged above (with the
+            # token redacted). Propagating it as __cause__ would expose the
+            # raw auth URL (containing the token) to Sentry, log formatters,
+            # and any other exception-chain handler.
             raise RepositoryCloneError(
                 "Unable to clone the GitHub repository. Confirm that the URL is "
                 "correct and that the repository is accessible."
-            ) from exc
+            ) from None
 
         logger.info(
             "GitHub repository cloned successfully",

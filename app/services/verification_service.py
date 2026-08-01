@@ -219,7 +219,7 @@ Respond strictly in JSON matching this schema:
             # instead of 0-100; scale up if so, then clamp to [0, 100].
             raw_confidence = float(parsed.get("confidence_score", 50.0))
             # If LLM returned a 0-1 fraction instead of 0-100, scale it up
-            if raw_confidence <= 1.0:
+            if 0.0 < raw_confidence < 1.0:
                 raw_confidence *= 100.0
             confidence_score = max(0.0, min(100.0, raw_confidence))
 

@@ -241,7 +241,7 @@ Respond strictly in JSON matching this schema:
                 verdict_map = {v.value.lower(): v for v in MemoryVerdict}
                 verdict = verdict_map.get(status_str, MemoryVerdict.UNCERTAIN)
                 raw_conf = float(verdict_data.get("confidence_score", 50.0))
-                if raw_conf <= 1.0:
+                if 0.0 < raw_conf < 1.0:
                     raw_conf *= 100.0
                 confidence = max(0.0, min(100.0, raw_conf))
                 explanation = verdict_data.get("explanation", finding.rationale)
@@ -269,6 +269,8 @@ Respond strictly in JSON matching this schema:
         parts = []
         for i, (chunk, finding) in enumerate(candidates, 1):
             line_no = chunk.start_line + finding.line_offset
+            code_snippet = chunk.content[:2000]
+            truncated_label = " (truncated to 2000 chars)" if len(chunk.content) > 2000 else ""
             parts.append(
                 f"--- CANDIDATE id=C{i} ---\n"
                 f"Rule: {finding.rule_id} ({finding.title}, heuristic severity: {finding.severity})\n"
@@ -277,7 +279,7 @@ Respond strictly in JSON matching this schema:
                 f"Flagged line: L{line_no}\n"
                 f"Flagged code: {finding.matched_text}\n"
                 f"Heuristic rationale: {finding.rationale}\n"
-                f"Surrounding code:\n{chunk.content[:2000]}\n"
+                f"Surrounding code{truncated_label}:\n{code_snippet}\n"
             )
         return "\n".join(parts)
 

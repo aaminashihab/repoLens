@@ -122,8 +122,11 @@ if not cors_origins:
 
 # Default allow_credentials to False (RepoLens uses X-API-Key header, not cookies)
 allow_credentials = False
-if os.getenv("CORS_ALLOW_CREDENTIALS", "false").lower() == "true" and "*" not in cors_origins:
-    allow_credentials = True
+if os.getenv("CORS_ALLOW_CREDENTIALS", "false").lower() == "true":
+    if "*" in cors_origins:
+        logger.warning("CORS_ALLOW_CREDENTIALS=true was requested but ignored because CORS_ORIGINS contains wildcard '*'.")
+    else:
+        allow_credentials = True
 
 app.add_middleware(
     CORSMiddleware,
