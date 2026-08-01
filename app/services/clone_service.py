@@ -66,7 +66,7 @@ class CloneService:
             raise RepositoryCloneError(
                 "Unable to clone the GitHub repository. Confirm that the URL is "
                 "correct and that the repository is accessible."
-            ) from None
+            ) from exc
 
         logger.info(
             "GitHub repository cloned successfully",

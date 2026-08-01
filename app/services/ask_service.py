@@ -214,6 +214,84 @@ class AskService:
         yield f'event: sources\ndata: {json.dumps(sources)}\n\n'
         yield 'event: done\ndata: {}\n\n'
 
+    # Map chunk_type (or file-extension derived type) to a markdown fence
+    # language specifier.  Falls back to 'text' for unrecognised types so
+    # the LLM always gets valid fenced code rather than a mislabelled block.
+    _FENCE_LANGUAGE: dict[str, str] = {
+        "python": "python",
+        "javascript": "javascript",
+        "typescript": "typescript",
+        "java": "java",
+        "go": "go",
+        "rust": "rust",
+        "c": "c",
+        "cpp": "cpp",
+        "c++": "cpp",
+        "csharp": "csharp",
+        "c#": "csharp",
+        "ruby": "ruby",
+        "php": "php",
+        "swift": "swift",
+        "kotlin": "kotlin",
+        "scala": "scala",
+        "sql": "sql",
+        "html": "html",
+        "css": "css",
+        "yaml": "yaml",
+        "json": "json",
+        "toml": "toml",
+        "sh": "bash",
+        "bash": "bash",
+        "shell": "bash",
+        "md": "markdown",
+        "markdown": "markdown",
+        "module": "text",
+        "function": "text",
+        "method": "text",
+        "class": "text",
+    }
+
+    @classmethod
+    def _fence_lang(cls, chunk: RetrievedChunk) -> str:
+        """Return the markdown code-fence language for a retrieved chunk.
+
+        Tries ``chunk.chunk_type`` first, then the file extension derived from
+        ``chunk.file_path``, falling back to ``'text'`` if neither is known.
+        """
+        lang = cls._FENCE_LANGUAGE.get(chunk.chunk_type.lower())
+        if lang and lang != "text":
+            return lang
+        # Derive from file extension (e.g. '.ts' → 'typescript')
+        ext = chunk.file_path.rsplit(".", 1)[-1].lower() if "." in chunk.file_path else ""
+        _EXT_MAP = {
+            "py": "python",
+            "js": "javascript",
+            "ts": "typescript",
+            "java": "java",
+            "go": "go",
+            "rs": "rust",
+            "c": "c",
+            "cpp": "cpp",
+            "cc": "cpp",
+            "cs": "csharp",
+            "rb": "ruby",
+            "php": "php",
+            "swift": "swift",
+            "kt": "kotlin",
+            "scala": "scala",
+            "sql": "sql",
+            "html": "html",
+            "css": "css",
+            "yaml": "yaml",
+            "yml": "yaml",
+            "json": "json",
+            "toml": "toml",
+            "sh": "bash",
+            "bash": "bash",
+            "md": "markdown",
+        }
+        return _EXT_MAP.get(ext, "text")
+
     @classmethod
     def _build_prompt(cls, question: str, chunks: list[RetrievedChunk]) -> str:
         """Format retrieved code and source metadata into chat context."""
@@ -224,7 +302,7 @@ class AskService:
                     f"File path: {chunk.file_path}",
                     f"Symbol name: {chunk.symbol_name}",
                     f"Chunk type: {chunk.chunk_type}",
-                    "```python",
+                    f"```{cls._fence_lang(chunk)}",
                     chunk.text,
                     "```",
                 )

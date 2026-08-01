@@ -24,9 +24,10 @@ class JobService:
         if error is not None:
             data["error"] = error
         
-        # BUG-NEW-4 FIX: Use a cryptographically unique temp file per write to
-        # prevent race conditions when concurrent threads update the same job.
-        # os.replace() is atomic on POSIX and Windows (same drive).
+        # Atomic write: use mkstemp + os.replace so a crash mid-write never
+        # leaves the job file empty or partially written.
+        # os.replace() is atomic on POSIX; on Windows it is atomic on the same
+        # drive (which is always the case here since tmp and dest share storage/).
         try:
             fd, tmp_path = tempfile.mkstemp(
                 dir=self._storage_path, prefix=f"{job_id}_", suffix=".json.tmp"

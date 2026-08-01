@@ -27,6 +27,8 @@ async def lifespan(app: FastAPI):
     # These are orphaned background tasks that will never complete.
     try:
         import json
+        import os
+        import tempfile
         from pathlib import Path
         job_storage = Path("storage/jobs")
         if job_storage.is_dir():
@@ -37,7 +39,20 @@ async def lifespan(app: FastAPI):
                     if data.get("status") == "processing":
                         data["status"] = "failed"
                         data["error"] = "Server was restarted while this job was running."
-                        job_file.write_text(json.dumps(data), encoding="utf-8")
+                        # Write atomically (mkstemp + os.replace) so a crash
+                        # mid-write never leaves an empty or corrupt job file.
+                        fd, tmp_path = tempfile.mkstemp(
+                            dir=job_storage,
+                            prefix=job_file.stem + "_",
+                            suffix=".json.tmp",
+                        )
+                        try:
+                            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                                json.dump(data, fh)
+                        except Exception:
+                            os.unlink(tmp_path)
+                            raise
+                        os.replace(tmp_path, job_file)
                         orphaned += 1
                 except Exception:
                     pass

@@ -31,13 +31,16 @@ class HeuristicFinding:
 class MemoryHeuristicEngine:
     """Regex/line-based scanner for common memory- and space-wasting patterns."""
 
-    # Rule catalogue: (rule_id, title, severity, compiled pattern, rationale)
-    _RULES: tuple[tuple[str, str, str, "re.Pattern[str]", str], ...] = (
+    # Rule catalogue: (rule_id, title, severity, compiled_pattern, rationale)
+    # Note: compiled_pattern is None for MEM-UNBOUNDED-ACCUMULATION because
+    # that rule is handled entirely by _match_unbounded_accumulation() with
+    # look-ahead loop-body analysis; _match_simple_rules skips it (see below).
+    _RULES: tuple[tuple[str, str, str, "re.Pattern[str] | None", str], ...] = (
         (
             "MEM-UNBOUNDED-ACCUMULATION",
             "Unbounded accumulation inside a loop",
             "high",
-            re.compile(r"^\s*(for|while)\b.*:\s*$"),
+            None,  # handled by _match_unbounded_accumulation, not _match_simple_rules
             "A loop that appends/extends a collection with no visible size cap, "
             "break condition, or periodic flush can grow without bound and "
             "exhaust memory on large inputs.",

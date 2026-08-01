@@ -102,7 +102,9 @@ class RetrievalService:
                 continue
             chunk = loaded_index.chunks[int(chunk_index)]
             sim_score = 1.0 / (1.0 + max(float(distance), 0.0))
-            # BUG-NEW-1 FIX: Filter out semantically irrelevant chunks below threshold
+            # Skip chunks that are semantically too distant from the query.
+            # L2 distance → similarity = 1/(1+d); scores below _MIN_SIMILARITY
+            # indicate the chunk is unlikely to be relevant evidence.
             if sim_score < self._MIN_SIMILARITY:
                 continue
             key = (chunk.file_path, chunk.symbol_name)
@@ -129,7 +131,14 @@ class RetrievalService:
                 key = (gnode.file_path, gnode.symbol_name)
                 if key not in seen_keys:
                     seen_keys.add(key)
-                    # Hop decay: 1-hop direct neighbor gets 0.75, 2-hop gets 0.6375, 3-hop gets 0.5418
+                    # Hop decay: traverse returns seeds at depth=0 (always deduped
+                    # by seen_keys above), 1-hop neighbours at depth=1, 2-hop at
+                    # depth=2.  Formula: 0.75 * 0.85^(depth-1), clamped ≥ 0.20.
+                    # depth=1 → 0.75 * 0.85^0 = 0.75
+                    # depth=2 → 0.75 * 0.85^1 = 0.6375
+                    # depth=3 → 0.75 * 0.85^2 ≈ 0.5418
+                    # The max(0, depth-1) guard handles the depth=0 edge-case
+                    # (seed nodes) if they somehow escape dedup; they score 0.75.
                     hop_decay_score = max(0.20, round(0.75 * (0.85 ** max(0, depth - 1)), 4))
                     retrieved_chunks.append(
                         RetrievedChunk(

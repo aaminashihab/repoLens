@@ -94,29 +94,22 @@ class EmbeddingService:
             for start in range(0, len(chunks), self._batch_size)
         ]
 
-        global _EXECUTOR
-        # Acquire the global lock so concurrent indexing jobs don't compete for
-        # the per-minute API quota and cause each other to exhaust retries.
-        with _EMBED_LOCK:
-            futures = []
-            for i, batch_tuple in enumerate(batches):
-                try:
-                    future = _EXECUTOR.submit(self._embed_batch_with_retry, batch_tuple, client)
-                except RuntimeError:
-                    _EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=5)
-                    future = _EXECUTOR.submit(self._embed_batch_with_retry, batch_tuple, client)
-                futures.append(future)
+        # Process batches sequentially, acquiring the global semaphore only
+        # for the duration of each API call.  Releasing it between batches
+        # (including during the inter-batch sleep) lets concurrent indexing
+        # jobs make progress rather than queuing behind the entire sleep window.
+        for i, batch_tuple in enumerate(batches):
+            with _EMBED_LOCK:
+                batch_results = self._embed_batch_with_retry(batch_tuple, client)
+            embedded_chunks.extend(batch_results)
 
-                if i < len(batches) - 1:
-                    logger.info(
-                        f"Batch {i + 1}/{len(batches)} submitted; "
-                        f"waiting {self._INTER_BATCH_DELAY:.0f}s before submitting next batch "
-                        "to respect rate limit."
-                    )
-                    time.sleep(self._INTER_BATCH_DELAY)
-
-            for future in futures:
-                embedded_chunks.extend(future.result())
+            if i < len(batches) - 1:
+                logger.info(
+                    f"Batch {i + 1}/{len(batches)} complete; "
+                    f"waiting {self._INTER_BATCH_DELAY:.0f}s before next batch "
+                    "to respect rate limit."
+                )
+                time.sleep(self._INTER_BATCH_DELAY)
 
         logger.info(
             "Chunk embedding completed",

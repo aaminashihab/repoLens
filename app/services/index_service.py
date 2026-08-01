@@ -66,9 +66,27 @@ class IndexService:
                 vectors = np.array([item.embedding for item in embedded_chunks], dtype="float32")
                 if len(vectors.shape) != 2 or vectors.shape[1] == 0:
                     raise IndexServiceError("Embeddings must be non-empty, equally sized vectors.")
-                index = faiss.IndexFlatL2(vectors.shape[1])
+                actual_dim = vectors.shape[1]
+                if actual_dim != dimension:
+                    # The caller passed a mismatched 'dimension' hint; use the
+                    # ground-truth value from the actual vectors to avoid building
+                    # an index that is incompatible with future search calls.
+                    logger.warning(
+                        "build_index: 'dimension' parameter (%d) does not match "
+                        "actual embedding dimension (%d); using actual dimension.",
+                        dimension,
+                        actual_dim,
+                        extra={"index_id": index_id},
+                    )
+                    dimension = actual_dim
+                index = faiss.IndexFlatL2(dimension)
                 index.add(vectors)
             else:
+                # No chunks: build a zero-vector index with the supplied dimension.
+                # Callers MUST pass the correct dimension for their embedding model
+                # (e.g. 768 for Gemini text-embedding-004, 1536 for OpenAI
+                # text-embedding-3-small).  The default 1536 is only correct for
+                # OpenAI; Gemini callers must pass dimension=768 explicitly.
                 index = faiss.IndexFlatL2(dimension)
 
             faiss.write_index(index, str(index_path))

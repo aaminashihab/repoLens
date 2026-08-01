@@ -3,6 +3,7 @@
 import asyncio
 import hashlib
 import hmac
+import json
 import logging
 import os
 from typing import Any
@@ -43,11 +44,15 @@ async def github_webhook(
     request: Request,
     event_type: str = Header(..., alias="X-GitHub-Event"),
     x_hub_signature_256: str | None = Header(None, alias="X-Hub-Signature-256"),
-    payload: dict[str, Any] = Body(...),
     service: VerificationService = Depends(get_verification_service),
     index_service: IndexService = Depends(get_index_service),
 ) -> dict[str, Any]:
     """Handle incoming GitHub webhooks for Pull Requests and Issues."""
+    # Read raw bytes FIRST — before any JSON parsing — so HMAC is computed
+    # against the exact bytes that GitHub signed.  FastAPI/Starlette buffers
+    # the body in request._body, so json.loads() below re-uses the same bytes.
+    raw_body = await request.body()
+
     secret = os.getenv("GITHUB_WEBHOOK_SECRET")
     if secret:
         if not x_hub_signature_256 or not x_hub_signature_256.startswith("sha256="):
@@ -55,7 +60,6 @@ async def github_webhook(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid or missing X-Hub-Signature-256 header",
             )
-        raw_body = await request.body()
         expected_sig = "sha256=" + hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
         if not hmac.compare_digest(x_hub_signature_256, expected_sig):
             raise HTTPException(
@@ -63,8 +67,16 @@ async def github_webhook(
                 detail="GitHub webhook signature verification failed",
             )
 
-    if not payload:
+    if not raw_body:
         raise HTTPException(status_code=400, detail="Missing payload")
+
+    try:
+        payload: dict[str, Any] = json.loads(raw_body)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload") from exc
+
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Payload must be a JSON object")
 
     repo_data = payload.get("repository", {})
     repo_url = repo_data.get("html_url") or repo_data.get("clone_url") or ""
