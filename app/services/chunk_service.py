@@ -256,8 +256,8 @@ class ChunkService:
             # Fallback module-level chunk for top-level code or scripts with no def/class AST nodes
             file_name = Path(file_path).name
             content_str = source.decode("utf-8", errors="replace")
-            # BUG-NEW-2 FIX: truncate content to cap, then compute end_line from actual
-            # truncated content — not the original file line count.
+            # Truncate before computing end_line so the stored line count reflects
+            # actual content length, not the original (potentially huge) file.
             truncated = content_str[:4000]
             truncated_lines = truncated.splitlines()
             chunks.append(
@@ -287,8 +287,8 @@ class ChunkService:
         ext = Path(file_path).suffix.lstrip(".")
         lang = ext if ext else "plaintext"
 
-        # BUG-NEW-3 FIX: Use consistent block-N labeling for ALL blocks (1-indexed)
-        # Previously: first block had no number, second jumped to #block-2 (skipping #block-1)
+        # Consistent 1-indexed block labels across all chunks: block-1, block-2, …
+        # First block is labelled block-1, so the sequence never skips.
         block_size = 60
         for i in range(0, len(lines), block_size):
             chunk_lines = lines[i : i + block_size]

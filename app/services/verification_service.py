@@ -97,15 +97,15 @@ class VerificationService:
                 missing_information=["Repository index is empty or query matched zero symbols."],
             )
 
-        # BUG-9 FIX: available_files computed only after confirming evidence is non-empty
+        # Compute available_files only after confirming evidence is non-empty
         available_files = {chunk.file_path for chunk in evidence_chunks}
 
         # Stage 3 & 4: LLM-as-Judge structured analysis
         raw_report = self._run_llm_judge(normalized_claim, evidence_chunks)
 
         # Stage 5: Guardrail validation & refusal enforcement
-        # BUG-3 FIX: completeness_score reflects retrieved chunk coverage relative to TOP_K.
-        # Guard: in unit tests, _retrieval_service may be a Mock; fall back to 5 safely.
+        # Completeness = retrieved chunks as a fraction of TOP_K. Guards against
+        # mocked retrieval services in tests (fall back to 5 if attribute is absent or non-int).
         top_k_raw = getattr(self._retrieval_service, '_TOP_K', 5)
         top_k = top_k_raw if isinstance(top_k_raw, int) else 5
         completeness_score = min(1.0, len(evidence_chunks) / max(1, top_k))
@@ -209,13 +209,14 @@ Respond strictly in JSON matching this schema:
 
             parsed = json.loads(text_content)
 
-            # BUG-4 FIX: Case-insensitive enum lookup — LLM might return 'likely true', 'LIKELY FALSE', etc.
+            # Case-insensitive enum lookup — LLM may return 'likely true', 'LIKELY FALSE', etc.
             status_str = parsed.get("verification_status", "Uncertain")
             status_enum = VerificationStatus.UNCERTAIN  # safe default
             _status_map = {s.value.lower(): s for s in VerificationStatus}
             status_enum = _status_map.get(str(status_str).lower().strip(), VerificationStatus.UNCERTAIN)
 
-            # BUG-5 + BUG-8 FIX: Normalize and clamp confidence_score
+            # Normalize and clamp confidence_score: some LLMs return a 0-1 fraction
+            # instead of 0-100; scale up if so, then clamp to [0, 100].
             raw_confidence = float(parsed.get("confidence_score", 50.0))
             # If LLM returned a 0-1 fraction instead of 0-100, scale it up
             if raw_confidence <= 1.0:

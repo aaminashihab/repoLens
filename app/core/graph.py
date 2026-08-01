@@ -45,8 +45,8 @@ class RepositoryGraph:
         self.nodes[node.node_id] = node
         if node.symbol_name:
             existing = self._symbol_lookup.setdefault(node.symbol_name, [])
-            # BUG-10 FIX: Deduplicate node_ids in symbol_lookup — calling add_node twice
-            # with the same node_id previously caused duplicate lookup entries.
+            # Deduplicate node_ids: if add_node is called twice with the same
+            # node_id (e.g. during re-indexing) the lookup list stays clean.
             if node.node_id not in existing:
                 existing.append(node.node_id)
 

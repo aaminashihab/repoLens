@@ -119,7 +119,7 @@ Rather than relying on a single unconstrained prompt, RepoLens executes a 4-stag
         ┌────────────────────────────────────────────────────────┐
         │ 2. Hybrid Retrieval Engine (Vector + AST Call Graph)   │
         │    • FAISS Dense Vector Similarity Search (Top-K=5)    │
-        │    • AST $N$-Hop Call-Graph Expansion (Python + JS/TS) │
+        │    • AST $N$-Hop Call-Graph Expansion (Python); Regex Call Graph (JS/TS) │
         │    • Exponential Graph Hop Decay (1-Hop: 0.75, 2-Hop: 0.6375)│
         └────────────────────────────┬───────────────────────────┘
                                      ▼
