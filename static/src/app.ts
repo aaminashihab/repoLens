@@ -2,9 +2,27 @@
 // Compiled to static/app.js by tsc. No framework. No runtime dependencies.
 // Backend API: FastAPI at /verify, /index-repository, /indexes, /ask/stream, /health
 
-declare const marked: { parse(src: string): string; setOptions?: (opts: Record<string, unknown>) => void };
-declare const hljs: { highlightElement(el: Element): void; highlightAuto(code: string): { value: string }; getLanguage(lang: string): unknown; highlight(code: string, opts: { language: string }): { value: string } };
-declare const DOMPurify: { sanitize(dirty: string): string };
+declare const marked: { parse(src: string): string; setOptions?: (opts: Record<string, unknown>) => void } | undefined;
+declare const hljs: { highlightElement(el: Element): void; highlightAuto(code: string): { value: string }; getLanguage(lang: string): unknown; highlight(code: string, opts: { language: string }): { value: string } } | undefined;
+declare const DOMPurify: { sanitize(dirty: string): string } | undefined;
+
+// ─── External Library Helpers & Safe Fallbacks ─────────────────────────────
+
+function safeSanitize(dirty: string): string {
+  if (typeof DOMPurify !== "undefined" && DOMPurify && typeof DOMPurify.sanitize === "function") {
+    return DOMPurify.sanitize(dirty);
+  }
+  const div = document.createElement("div");
+  div.textContent = dirty;
+  return div.innerHTML;
+}
+
+function safeParseMarkdown(markdownText: string): string {
+  if (typeof marked !== "undefined" && marked && typeof marked.parse === "function") {
+    return safeSanitize(marked.parse(markdownText));
+  }
+  return safeSanitize(markdownText);
+}
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -119,7 +137,7 @@ async function loadIndexes(): Promise<void> {
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
-    listEl.innerHTML = `<div class="indexes-empty">Error: ${DOMPurify.sanitize(msg)}</div>`;
+    listEl.innerHTML = `<div class="indexes-empty">Error: ${safeSanitize(msg)}</div>`;
   }
 }
 
@@ -135,9 +153,9 @@ function buildIndexItem(idx: IndexEntry): HTMLElement {
   } catch { /* ignore */ }
 
   const created = idx.created_at ? new Date(idx.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "N/A";
-  const cleanName = DOMPurify.sanitize(shortName);
-  const cleanUrl = DOMPurify.sanitize(idx.repo_url || "");
-  const cleanCreated = DOMPurify.sanitize(created);
+  const cleanName = safeSanitize(shortName);
+  const cleanUrl = safeSanitize(idx.repo_url || "");
+  const cleanCreated = safeSanitize(created);
 
   const item = document.createElement("div");
   item.className = `index-item ${isActive ? "index-item--active" : ""} ${isEmpty ? "index-item--empty" : ""} fade-in`;
@@ -202,7 +220,7 @@ function setActiveIndex(indexId: string, repoUrl: string, chunkCount: number): v
   // Update sidebar active state
   document.querySelectorAll(".index-item").forEach(el => el.classList.remove("index-item--active"));
   const items = Array.from(document.querySelectorAll<HTMLElement>(".index-item"));
-  const match = items.find(el => el.querySelector(".index-item__name")?.getAttribute("title") === DOMPurify.sanitize(repoUrl));
+  const match = items.find(el => el.querySelector(".index-item__name")?.getAttribute("title") === safeSanitize(repoUrl));
   if (match) match.classList.add("index-item--active");
 
   // Update current-index display
@@ -216,7 +234,7 @@ function setActiveIndex(indexId: string, repoUrl: string, chunkCount: number): v
   if (infoEl) {
     infoEl.innerHTML = `
       <span class="current-index__label">Active Index</span>
-      <span class="current-index__name">${DOMPurify.sanitize(displayName)}</span>
+      <span class="current-index__name">${safeSanitize(displayName)}</span>
     `;
     infoEl.classList.add("current-index--active");
   }
@@ -227,7 +245,7 @@ function setActiveIndex(indexId: string, repoUrl: string, chunkCount: number): v
   if (chatInput) { chatInput.disabled = false; chatInput.placeholder = "Enter a claim to verify…"; }
   if (sendBtn) sendBtn.disabled = false;
 
-  const safeName: string = DOMPurify.sanitize(displayName);
+  const safeName: string = safeSanitize(displayName);
   appendMessage("system", `✓ Index activated — you can now verify claims about **${safeName}**.`);
   showToast(`Index activated: ${displayName}`, "success");
 }
@@ -389,9 +407,9 @@ function appendMessage(role: "user" | "assistant" | "system", text: string): HTM
   if (role === "user") {
     content.textContent = text;
   } else if (role === "system") {
-    content.innerHTML = DOMPurify.sanitize(marked.parse(text));
+    content.innerHTML = safeParseMarkdown(text);
   } else {
-    content.innerHTML = DOMPurify.sanitize(marked.parse(text));
+    content.innerHTML = safeParseMarkdown(text);
   }
 
   chatHistory.appendChild(el);
@@ -448,11 +466,11 @@ function renderOnboardingGuide(container: HTMLElement): void {
 }
 
 function renderEvidenceCard(item: EvidenceItem, type: "supporting" | "contradicting"): string {
-  const cleanPath = DOMPurify.sanitize(item.file_path);
-  const cleanRange = DOMPurify.sanitize(item.line_range);
-  const cleanSymbol = DOMPurify.sanitize(item.symbol_name);
-  const cleanRelevance = DOMPurify.sanitize(item.relevance);
-  const cleanSnippet = DOMPurify.sanitize(item.snippet);
+  const cleanPath = safeSanitize(item.file_path);
+  const cleanRange = safeSanitize(item.line_range);
+  const cleanSymbol = safeSanitize(item.symbol_name);
+  const cleanRelevance = safeSanitize(item.relevance);
+  const cleanSnippet = safeSanitize(item.snippet);
 
   return `
     <div class="evidence-card evidence-card--${type}">
@@ -486,7 +504,7 @@ function renderVerificationReport(report: VerificationReport, container: HTMLEle
       <div class="report__header">
         <div class="report__verdict ${cfg.cls}">
           <span class="report__verdict-icon">${cfg.icon}</span>
-          <span class="report__verdict-label">${DOMPurify.sanitize(cfg.label)}</span>
+          <span class="report__verdict-label">${safeSanitize(cfg.label)}</span>
         </div>
         <div class="report__score">
           <span class="report__score-value">${score}%</span>
@@ -507,7 +525,7 @@ function renderVerificationReport(report: VerificationReport, container: HTMLEle
       const ok = h.status === "VERIFIED";
       html += `<div class="hypothesis hypothesis--${ok ? "verified" : "unverified"}">
         <span class="hypothesis__icon">${ok ? "✓" : "?"}</span>
-        <span class="hypothesis__text">${DOMPurify.sanitize(h.statement)}</span>
+        <span class="hypothesis__text">${safeSanitize(h.statement)}</span>
       </div>`;
     });
     html += `</div></div>`;
@@ -540,7 +558,7 @@ function renderVerificationReport(report: VerificationReport, container: HTMLEle
         Potential Risks
       </h4>
       <ul class="report__list report__list--warn">
-        ${report.potential_risks.map(r => `<li>${DOMPurify.sanitize(r)}</li>`).join("")}
+        ${report.potential_risks.map(r => `<li>${safeSanitize(r)}</li>`).join("")}
       </ul>
     </div>`;
   }
@@ -549,7 +567,7 @@ function renderVerificationReport(report: VerificationReport, container: HTMLEle
     html += `<div class="report__section">
       <h4 class="report__section-title report__section-title--muted">Missing Information</h4>
       <ul class="report__list">
-        ${report.missing_information.map(m => `<li>${DOMPurify.sanitize(m)}</li>`).join("")}
+        ${report.missing_information.map(m => `<li>${safeSanitize(m)}</li>`).join("")}
       </ul>
     </div>`;
   }
@@ -561,14 +579,18 @@ function renderVerificationReport(report: VerificationReport, container: HTMLEle
         Recommended Tests
       </h4>
       <ul class="report__list">
-        ${report.recommended_tests.map(t => `<li><strong>${DOMPurify.sanitize(t.test_type)}:</strong> ${DOMPurify.sanitize(t.description)}</li>`).join("")}
+        ${report.recommended_tests.map(t => `<li><strong>${safeSanitize(t.test_type)}:</strong> ${safeSanitize(t.description)}</li>`).join("")}
       </ul>
     </div>`;
   }
 
   html += `</div>`;
   container.innerHTML = html;
-  container.querySelectorAll<HTMLElement>("pre code").forEach(block => hljs.highlightElement(block));
+  if (typeof hljs !== "undefined" && hljs) {
+    container.querySelectorAll<HTMLElement>("pre code").forEach(block => {
+      try { hljs.highlightElement(block); } catch { /* ignore syntax highlight errors */ }
+    });
+  }
 }
 
 // ─── Chat / Verification ─────────────────────────────────────────────────────
