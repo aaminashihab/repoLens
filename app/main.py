@@ -151,7 +151,14 @@ class _SecurityHeadersMiddleware(BaseHTTPMiddleware):
         "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
         # Minimal CSP: only allow same-origin resources. Tighten per-route if
         # the UI loads third-party scripts (e.g. CDN fonts).
-        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'",
+        "Content-Security-Policy": (
+            "default-src 'self'; "
+            "script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "img-src 'self' data:; "
+            "connect-src 'self';"
+        ),
         # Don't send the full Referer header to cross-origin destinations.
         "Referrer-Policy": "strict-origin-when-cross-origin",
         # Block browser features not used by RepoLens (reduces attack surface).

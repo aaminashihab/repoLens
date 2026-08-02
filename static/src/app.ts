@@ -633,7 +633,7 @@ async function handleVerification(claim: string): Promise<void> {
         renderOnboardingGuide(contentEl);
       } else {
         const msg = Array.isArray(detail) ? detail.map((d: { msg: string }) => d.msg).join(" | ") : String(detail);
-        contentEl.innerHTML = `<p class="error-text">Validation Error: ${DOMPurify.sanitize(msg)}</p>`;
+        contentEl.innerHTML = `<p class="error-text">Validation Error: ${safeSanitize(msg)}</p>`;
       }
       return;
     }
@@ -645,7 +645,7 @@ async function handleVerification(claim: string): Promise<void> {
     renderVerificationReport(data as VerificationReport, contentEl);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
-    contentEl.innerHTML = `<p class="error-text">Verification Error: ${DOMPurify.sanitize(msg)}</p>`;
+    contentEl.innerHTML = `<p class="error-text">Verification Error: ${safeSanitize(msg)}</p>`;
     showToast("Verification failed", "error");
   } finally {
     isVerifying = false;
@@ -768,7 +768,16 @@ document.addEventListener("DOMContentLoaded", () => {
         body: JSON.stringify({ repo_url: url }),
       });
       const data: IndexStartResponse = await res.json();
-      if (!res.ok) throw new Error((data as unknown as { detail: string }).detail || "Failed to start indexing");
+      if (!res.ok) {
+        // FastAPI 422: detail is an array of {loc, msg, type} objects
+        // Slowapi 429: uses key 'error' not 'detail'
+        const rawDetail = (data as unknown as { detail?: unknown; error?: string }).detail
+          || (data as unknown as { error?: string }).error;
+        const msg = Array.isArray(rawDetail)
+          ? (rawDetail as { msg: string }[]).map(d => d.msg).join(" | ")
+          : (rawDetail as string | undefined) || "Failed to start indexing";
+        throw new Error(msg);
+      }
       pollStatus(data.index_id, url);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";

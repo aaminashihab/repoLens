@@ -48,6 +48,9 @@ class ChunkService:
     _MAX_FILE_BYTES = 512 * 1024  # 512 KB
     # Total repository byte budget across all files (prevents zip-bomb style repos)
     _MAX_TOTAL_BYTES = 50 * 1024 * 1024  # 50 MB
+    # Max chunks to embed — keeps free-tier Gemini quota from being exhausted.
+    # Raise via MAX_CHUNKS_PER_INDEX env var for paid API keys.
+    _MAX_CHUNKS_PER_INDEX: int = int(os.getenv("MAX_CHUNKS_PER_INDEX", "200"))
 
     _SUPPORTED_EXTENSIONS = {
         ".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".rs", ".java", ".c", ".cpp",
@@ -108,13 +111,12 @@ class ChunkService:
                 self._extract_graph_edges(tree.root_node, source, relative_path, graph)
             elif file_path.suffix in {".js", ".jsx", ".ts", ".tsx"}:
                 file_chunks = self._extract_jsts_chunks(source, relative_path)
-                self._extract_jsts_graph_edges(source, relative_path, graph)
             else:
                 file_chunks = self._extract_generic_chunks(source, relative_path)
 
             indexed_chunks.extend(file_chunks)
 
-            # Build graph nodes
+            # Build graph nodes FIRST so that edge extraction can look them up
             for chunk in file_chunks:
                 node_id = f"{chunk.file_path}::{chunk.symbol_name}"
                 graph.add_node(
@@ -129,7 +131,24 @@ class ChunkService:
                     )
                 )
 
+            # Extract edges AFTER nodes are registered so source node IDs resolve
+            if file_path.suffix in {".js", ".jsx", ".ts", ".tsx"}:
+                self._extract_jsts_graph_edges(source, relative_path, graph)
+
         processing_time_seconds = perf_counter() - started_at
+
+        # Respect per-index chunk cap to avoid exhausting free-tier API quota.
+        if len(indexed_chunks) > self._MAX_CHUNKS_PER_INDEX:
+            logger.warning(
+                "Repository produced more chunks than MAX_CHUNKS_PER_INDEX; truncating.",
+                extra={
+                    "total_chunks": len(indexed_chunks),
+                    "cap": self._MAX_CHUNKS_PER_INDEX,
+                    "repository_path": str(repository_path),
+                },
+            )
+            indexed_chunks = indexed_chunks[: self._MAX_CHUNKS_PER_INDEX]
+
         logger.info(
             "Repository scan completed",
             extra={
@@ -402,24 +421,42 @@ class ChunkService:
     ) -> None:
         """Extract function call and import relationships from JS/TS source code."""
         content_str = source.decode("utf-8", errors="replace")
-        
+
+        # Collect all node IDs that belong to this file so we can use them as
+        # valid source IDs.  Node IDs are registered as "{file_path}::{symbol_name}"
+        # by index_repository() after chunking, so we must match that exact format.
+        file_node_ids = [
+            node.node_id
+            for node in graph.nodes.values()
+            if node.file_path == file_path
+        ]
+        # Default source: use the first (file-level) node for this file, or skip
+        # edge registration entirely when no nodes have been added yet.
+        default_source_id = file_node_ids[0] if file_node_ids else None
+
         # Extract import statements
-        import_pattern = re.compile(r"import\s+.*?\{?\s*([A-Za-z0-9_$,\s]+)\s*\}?\s+from\s+['\"](.*?)['\"]")
+        import_pattern = re.compile(r"import\s+.*?\{?\s*([A-Za-z0-9_$,\s]+)\s*\}?\s+from\s+['\"](.+?)['\"]")
         for match in import_pattern.finditer(content_str):
             imported_symbols = [s.strip() for s in match.group(1).split(",") if s.strip()]
             for sym in imported_symbols:
                 target_nodes = graph.find_nodes_by_symbol(sym)
                 for tnode in target_nodes:
-                    if tnode.file_path != file_path:
-                        graph.add_edge(f"{file_path}::{Path(file_path).name}", tnode.node_id, "imports")
+                    if tnode.file_path != file_path and default_source_id:
+                        graph.add_edge(default_source_id, tnode.node_id, "imports")
 
-        # Extract function calls inside defined JS/TS symbols
+        # Extract function calls — attribute each call to the containing symbol node
+        # by scanning which file-level node IDs match a symbol whose line range
+        # contains the call site.  For simplicity we use the default (first) node
+        # as the source, which is accurate for file-block-style chunks.
         call_pattern = re.compile(r"\b([A-Za-z0-9_$]+)\s*\(")
+        _BUILTINS = {"if", "for", "while", "switch", "catch", "require",
+                     "console", "parseInt", "parseFloat", "setTimeout",
+                     "clearTimeout", "setInterval", "clearInterval"}
         for call_match in call_pattern.finditer(content_str):
             called_name = call_match.group(1)
-            if called_name not in {"if", "for", "while", "switch", "catch", "require", "console", "parseInt", "parseFloat"}:
+            if called_name not in _BUILTINS:
                 target_nodes = graph.find_nodes_by_symbol(called_name)
                 for tnode in target_nodes:
-                    if tnode.file_path != file_path:
-                        graph.add_edge(f"{file_path}::{Path(file_path).name}", tnode.node_id, "calls")
+                    if tnode.file_path != file_path and default_source_id:
+                        graph.add_edge(default_source_id, tnode.node_id, "calls")
 

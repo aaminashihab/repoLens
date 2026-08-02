@@ -71,10 +71,20 @@ class EmbeddingService:
     @property
     def embedding_dimension(self) -> int:
         """Return the dimension of embedding vectors produced by the active provider/model."""
-        if self._model == "text-embedding-004":
-            return 768
-        elif self._model == "text-embedding-3-small":
-            return 1536
+        _DIMENSIONS: dict[str, int] = {
+            # Gemini models
+            "text-embedding-004": 768,
+            "gemini-embedding-001": 3072,
+            "gemini-embedding-2-preview": 3072,
+            "gemini-embedding-2": 3072,
+            # OpenAI models
+            "text-embedding-3-small": 1536,
+            "text-embedding-3-large": 3072,
+            "text-embedding-ada-002": 1536,
+        }
+        if self._model in _DIMENSIONS:
+            return _DIMENSIONS[self._model]
+        # Fallback by provider
         if self._provider == "gemini":
             return 768
         return 1536

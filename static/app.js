@@ -559,7 +559,6 @@ function renderVerificationReport(report, container) {
         });
     }
 }
-}
 // ─── Chat / Verification ─────────────────────────────────────────────────────
 async function handleVerification(claim) {
     if (!currentIndexId || isVerifying)
@@ -595,7 +594,7 @@ async function handleVerification(claim) {
             }
             else {
                 const msg = Array.isArray(detail) ? detail.map((d) => d.msg).join(" | ") : String(detail);
-                contentEl.innerHTML = `<p class="error-text">Validation Error: ${DOMPurify.sanitize(msg)}</p>`;
+                contentEl.innerHTML = `<p class="error-text">Validation Error: ${safeSanitize(msg)}</p>`;
             }
             return;
         }
@@ -606,7 +605,7 @@ async function handleVerification(claim) {
     }
     catch (err) {
         const msg = err instanceof Error ? err.message : "Unknown error";
-        contentEl.innerHTML = `<p class="error-text">Verification Error: ${DOMPurify.sanitize(msg)}</p>`;
+        contentEl.innerHTML = `<p class="error-text">Verification Error: ${safeSanitize(msg)}</p>`;
         showToast("Verification failed", "error");
     }
     finally {
@@ -728,8 +727,15 @@ document.addEventListener("DOMContentLoaded", () => {
                 body: JSON.stringify({ repo_url: url }),
             });
             const data = await res.json();
-            if (!res.ok)
-                throw new Error(data.detail || "Failed to start indexing");
+            if (!res.ok) {
+                // FastAPI 422: detail is an array of {loc, msg, type} objects
+                // Slowapi 429: uses key 'error' not 'detail'
+                const detail = data.detail || data.error;
+                const msg = Array.isArray(detail)
+                    ? detail.map((d) => d.msg).join(" | ")
+                    : (detail || "Failed to start indexing");
+                throw new Error(msg);
+            }
             pollStatus(data.index_id, url);
         }
         catch (err) {

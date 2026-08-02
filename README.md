@@ -22,6 +22,11 @@ Instead of giving you an AI opinion, RepoLens finds the **most relevant lines of
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](#tech-stack)
 [![CI](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml)
 
+<br/>
+<br/>
+
+<img src="static/demo.gif" alt="RepoLens Demo Video" width="100%"/>
+
 </div>
 
 ---

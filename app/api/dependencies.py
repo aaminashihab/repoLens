@@ -37,7 +37,9 @@ def get_chunk_service() -> ChunkService:
     return ChunkService()
 
 def get_embedding_service() -> EmbeddingService:
-    return EmbeddingService()
+    import os
+    batch_size = int(os.getenv("EMBEDDING_BATCH_SIZE", "100"))
+    return EmbeddingService(batch_size=batch_size)
 
 def get_index_service() -> IndexService:
     return IndexService()

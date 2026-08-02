@@ -35,3 +35,6 @@ Thumbs.db
 
 # Frontend build artifacts
 static/node_modules/
+
+# Raw media / recordings
+*.mp4
