@@ -17,10 +17,10 @@ Instead of giving you an AI opinion, RepoLens finds the **most relevant lines of
 ---
 
 [![Live Demo](https://img.shields.io/badge/🚀_Live_Demo-repolens--x7b8.onrender.com-6366f1?style=for-the-badge)](https://repolens-x7b8.onrender.com/)
-[![Tests](https://img.shields.io/badge/✅_Tests-84_Passing-22c55e?style=for-the-badge)](#testing--quality-assurance)
+[![Tests](https://img.shields.io/badge/✅_Tests-93_Passing-22c55e?style=for-the-badge)](#testing--quality-assurance)
 [![Python](https://img.shields.io/badge/Python-3.12-3b82f6?style=for-the-badge&logo=python&logoColor=white)](#tech-stack)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](#tech-stack)
-[![CI](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml/badge.svg)](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml)
+[![CI](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml)
 
 </div>
 
@@ -383,10 +383,10 @@ $env:PYTHONPATH="."; .venv\Scripts\pytest
 ```
 
 ```
-======================== 84 passed, 1 warning in 16.61s ========================
+======================== 93 passed, 2 warnings in 14.16s ========================
 ```
 
-**The 84-test suite covers:**
+**The 93-test suite covers:**
 - 🔐 Webhook HMAC signature verification & rate limiting
 - 🌲 AST call graph construction & N-hop traversal
 - 🛡️ Guardrail refusal logic & evidence completeness validation
