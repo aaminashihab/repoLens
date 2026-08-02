@@ -1,3 +1,4 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -50,7 +51,12 @@ class CloneServiceTests(unittest.TestCase):
             try:
                 repo_path = self.service.clone_repository("https://github.com/owner/repo")
                 self.assertEqual(repo_path, Path(temp_dir) / "repository")
-                mock_clone.assert_called_once_with("https://github.com/owner/repo.git", repo_path)
+                # clone_from is called with the URL and repo path plus extra
+                # performance/security kwargs (depth, single_branch, env) — only
+                # assert the positional args that we care about here.
+                call_args = mock_clone.call_args
+                self.assertEqual(call_args.args[0], "https://github.com/owner/repo.git")
+                self.assertEqual(call_args.args[1], repo_path)
             finally:
                 import shutil
                 shutil.rmtree(temp_dir, ignore_errors=True)
@@ -104,11 +110,15 @@ class CloneServiceTests(unittest.TestCase):
 class RepositoryApiTests(unittest.TestCase):
     def setUp(self) -> None:
         self.client = TestClient(app)
-        self.orig_api_key = api_deps.API_KEY
-        api_deps.API_KEY = None
+        # Patch os.environ so the per-request os.getenv("API_KEY") read
+        # returns a controlled value without touching the module-level variable.
+        self._env_patcher = patch.dict("os.environ", {}, clear=False)
+        self._env_patcher.start()
+        # Ensure API_KEY is absent so auth is disabled for these tests.
+        os.environ.pop("API_KEY", None)
 
     def tearDown(self) -> None:
-        api_deps.API_KEY = self.orig_api_key
+        self._env_patcher.stop()
 
     @patch("app.api.routes.repositories.BackgroundTasks.add_task")
     @patch("app.api.routes.repositories.CloneService.validate_github_url")

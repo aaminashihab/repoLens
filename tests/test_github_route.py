@@ -31,15 +31,18 @@ class GithubRouteTests(unittest.TestCase):
         self.client = TestClient(fastapi_app)
         self.mock_service = Mock()
         fastapi_app.dependency_overrides[api_deps.get_verification_service] = lambda: self.mock_service
-        self.orig_api_key = api_deps.API_KEY
-        api_deps.API_KEY = None  # disable key check for simple testing
+        # Patch os.environ so the per-request os.getenv("API_KEY") read returns
+        # nothing, disabling auth for all tests in this class.
+        self._env_patcher = patch.dict("os.environ", {}, clear=False)
+        self._env_patcher.start()
+        os.environ.pop("API_KEY", None)
 
     def tearDown(self) -> None:
         import app.api.routes.github as api_github
         api_github.GITHUB_RATE_LIMIT = "30/minute"
         self._reset_limiter()
         fastapi_app.dependency_overrides.clear()
-        api_deps.API_KEY = self.orig_api_key
+        self._env_patcher.stop()
 
     def test_github_webhook_pull_request_opened_no_index(self) -> None:
         headers = {"X-GitHub-Event": "pull_request"}
