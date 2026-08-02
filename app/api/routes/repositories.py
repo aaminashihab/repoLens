@@ -205,6 +205,12 @@ def get_indexing_status(
         status_data = job_service.get_job_status(index_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error(f"Error reading job status for {index_id}: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error retrieving job status",
+        ) from exc
     if not status_data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
     return status_data

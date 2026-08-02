@@ -302,28 +302,73 @@ function setIndexingState(processing: boolean, message: string, isError = false)
   if (statusText) statusText.textContent = message;
 }
 
-async function pollStatus(indexId: string, repoUrl: string): Promise<void> {
+async function pollStatus(indexId: string, repoUrl: string, retries = 0): Promise<void> {
+  const MAX_RETRIES = 5;
   try {
     const res = await apiFetch(`/index-repository/${indexId}`);
+
+    if (res.status === 401) {
+      setIndexingState(false, "Authentication required: Missing or invalid API key", true);
+      showToast("Authentication required — check API key in settings", "error");
+      return;
+    }
+
+    if (res.status === 404) {
+      if (retries < MAX_RETRIES) {
+        setTimeout(() => pollStatus(indexId, repoUrl, retries + 1), 2000);
+        return;
+      }
+      setIndexingState(false, "Indexing job not found", true);
+      showToast("Indexing job not found", "error");
+      return;
+    }
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      const errMsg = errData.detail || errData.message || `Server error (${res.status})`;
+      if (retries < MAX_RETRIES) {
+        setTimeout(() => pollStatus(indexId, repoUrl, retries + 1), 3000);
+        return;
+      }
+      setIndexingState(false, `Error polling status: ${errMsg}`, true);
+      showToast("Error polling indexing status", "error");
+      return;
+    }
+
     const data: IndexJobStatus = await res.json();
 
     if (data.status === "processing") {
-      setIndexingState(true, "Parsing files and building call graphs…");
-      setTimeout(() => pollStatus(indexId, repoUrl), 2500);
+      setIndexingState(true, "Parsing files, building call graphs & generating embeddings…");
+      setTimeout(() => pollStatus(indexId, repoUrl, 0), 2500);
     } else if (data.status === "completed") {
       setIndexingState(false, "Indexing complete!");
+      showToast("Repository indexing completed!", "success");
       await loadIndexes();
-      // Auto-activate the new index after loading (find its chunk count from list)
+      // Auto-activate the new index after loading
       const listRes = await apiFetch("/indexes");
       const allIndexes: IndexEntry[] = listRes.ok ? await listRes.json() : [];
       const entry = allIndexes.find(i => i.index_id === indexId);
       if (entry) setActiveIndex(indexId, repoUrl, entry.vector_count);
     } else if (data.status === "failed") {
-      setIndexingState(false, `Failed: ${data.error || "Unknown error"}`, true);
-      showToast("Indexing failed", "error");
+      const errorDetail = data.error || "Unknown error during indexing";
+      setIndexingState(false, `Failed: ${errorDetail}`, true);
+      showToast(`Indexing failed: ${errorDetail}`, "error");
+    } else {
+      if (retries < MAX_RETRIES) {
+        setTimeout(() => pollStatus(indexId, repoUrl, retries + 1), 2500);
+      } else {
+        setIndexingState(false, "Received invalid status response from server", true);
+      }
     }
-  } catch {
-    setIndexingState(false, "Error polling status", true);
+  } catch (err) {
+    if (retries < MAX_RETRIES) {
+      // Retry transient network connection errors up to 5 times
+      setTimeout(() => pollStatus(indexId, repoUrl, retries + 1), 3000);
+    } else {
+      const errMsg = err instanceof Error ? err.message : "Network disconnected";
+      setIndexingState(false, `Polling failed: ${errMsg}`, true);
+      showToast("Network error while polling status", "error");
+    }
   }
 }
 
