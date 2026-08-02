@@ -60,6 +60,16 @@ async def github_webhook(
     # the body in request._body, so json.loads() below re-uses the same bytes.
     raw_body = await request.body()
 
+    # Reject oversized webhook payloads before doing anything else.
+    # A 1 MB cap is well above any legitimate GitHub webhook payload
+    # (typical PRs/issues are a few KB) and blocks memory-exhaustion attacks.
+    _MAX_WEBHOOK_BYTES = 1 * 1024 * 1024  # 1 MB
+    if len(raw_body) > _MAX_WEBHOOK_BYTES:
+        raise HTTPException(status_code=413, detail="Webhook payload too large.")
+
+    if not raw_body:
+        raise HTTPException(status_code=400, detail="Missing payload")
+
     secret = os.getenv("GITHUB_WEBHOOK_SECRET")
     if secret:
         if not x_hub_signature_256 or not x_hub_signature_256.startswith("sha256="):
@@ -73,9 +83,6 @@ async def github_webhook(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="GitHub webhook signature verification failed",
             )
-
-    if not raw_body:
-        raise HTTPException(status_code=400, detail="Missing payload")
 
     try:
         payload: dict[str, Any] = json.loads(raw_body)

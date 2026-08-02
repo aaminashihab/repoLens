@@ -19,8 +19,12 @@ API_KEY = os.getenv("API_KEY")
 limiter = Limiter(key_func=get_remote_address)
 
 async def require_api_key(x_api_key: str | None = Header(None, alias="X-API-Key")) -> None:
-    if API_KEY:
-        if not x_api_key or not hmac.compare_digest(x_api_key, API_KEY):
+    # Read the key at call-time, not at module-import time, so that secrets
+    # injected after startup (e.g. via a secrets-manager sidecar or Render
+    # secret file) are honoured without restarting the server.
+    api_key = os.getenv("API_KEY")
+    if api_key:
+        if not x_api_key or not hmac.compare_digest(x_api_key, api_key):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid or missing API key"

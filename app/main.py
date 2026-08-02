@@ -8,13 +8,14 @@ load_dotenv()
 import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.dependencies import limiter
 from app.api.router import api_router
@@ -108,6 +109,64 @@ app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# ---------------------------------------------------------------------------
+# Security: enforce a hard cap on incoming request body size.
+# A 10 MB limit prevents resource-exhaustion attacks where an attacker sends
+# a multi-GB body to bloat memory on a Render free-tier instance.
+# ---------------------------------------------------------------------------
+_MAX_REQUEST_BODY_BYTES = int(os.getenv("MAX_REQUEST_BODY_BYTES", str(10 * 1024 * 1024)))  # 10 MB
+
+
+class _RequestSizeLimitMiddleware(BaseHTTPMiddleware):
+    """Reject requests whose Content-Length header exceeds the configured limit."""
+
+    async def dispatch(self, request: Request, call_next):
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > _MAX_REQUEST_BODY_BYTES:
+            return JSONResponse(
+                status_code=413,
+                content={"detail": "Request body too large."},
+            )
+        return await call_next(request)
+
+
+app.add_middleware(_RequestSizeLimitMiddleware)
+
+
+# ---------------------------------------------------------------------------
+# Security: add defensive HTTP response headers to every response.
+# These headers protect the browser-served frontend from common web attacks
+# without requiring changes to the static HTML/JS files.
+# ---------------------------------------------------------------------------
+class _SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Inject security-related response headers on every reply."""
+
+    _HEADERS = {
+        # Prevent MIME-type sniffing (stops browsers running injected scripts
+        # from JS/JSON responses served with wrong content types).
+        "X-Content-Type-Options": "nosniff",
+        # Deny framing to protect against clickjacking attacks.
+        "X-Frame-Options": "DENY",
+        # Enforce HTTPS for 1 year (only effective behind TLS, safe otherwise).
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+        # Minimal CSP: only allow same-origin resources. Tighten per-route if
+        # the UI loads third-party scripts (e.g. CDN fonts).
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'",
+        # Don't send the full Referer header to cross-origin destinations.
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        # Block browser features not used by RepoLens (reduces attack surface).
+        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    }
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        for header, value in self._HEADERS.items():
+            response.headers[header] = value
+        return response
+
+
+app.add_middleware(_SecurityHeadersMiddleware)
+
 cors_origins_raw = os.getenv("CORS_ORIGINS", "")
 cors_origins = [o.strip() for o in cors_origins_raw.split(",") if o.strip()]
 
@@ -182,3 +241,19 @@ async def read_root() -> FileResponse:
 async def get_health() -> dict:
     """Return a lightweight health status of the backend."""
     return {"status": "ok"}
+
+
+@app.get("/ping", tags=["ui"])
+async def ping() -> dict:
+    """Ultra-lightweight keep-alive endpoint for uptime monitors.
+
+    Hit this URL every 14 minutes from UptimeRobot / BetterStack / cron-job.org
+    to prevent Render free-tier cold starts.  Responds with a minimal JSON
+    payload \u2014 no filesystem I/O, no authentication, no logging overhead.
+
+    Example UptimeRobot configuration:
+        Monitor Type : HTTP(s)
+        URL          : https://repolens-x7b8.onrender.com/ping
+        Interval     : 14 minutes
+    """
+    return {"pong": True}

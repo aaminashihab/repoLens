@@ -157,7 +157,12 @@ class IndexService:
         return LoadedIndex(index=index, chunks=chunks, graph=graph, index_path=index_path)
 
     def list_indexes(self) -> list[dict[str, Any]]:
-        """List summaries of all persisted FAISS indexes."""
+        """List summaries of all persisted FAISS indexes.
+
+        Performance note: only scalar fields are read from metadata; the
+        'chunks' array is NOT fully deserialized so that large indexes do not
+        allocate megabytes of source-code strings just to produce a summary.
+        """
         indexes = []
         if not self._storage_path.is_dir():
             return []
@@ -168,13 +173,19 @@ class IndexService:
                 if metadata_path.is_file():
                     try:
                         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-                        chunks = metadata.get("chunks", [])
+                        # Read vector_count from the stored scalar; fall back to
+                        # counting the chunks list only if the scalar is absent
+                        # (backward-compat with indexes built before this fix).
+                        vector_count = metadata.get("vector_count")
+                        if vector_count is None:
+                            chunks_raw = metadata.get("chunks", [])
+                            vector_count = len(chunks_raw) if isinstance(chunks_raw, list) else 0
                         indexes.append(
                             {
                                 "index_id": path.name,
                                 "repo_url": metadata.get("repo_url", ""),
-                                "vector_count": metadata.get("vector_count", 0),
-                                "chunk_count": len(chunks) if isinstance(chunks, list) else 0,
+                                "vector_count": int(vector_count),
+                                "chunk_count": int(vector_count),
                                 "created_at": metadata.get("created_at", ""),
                             }
                         )

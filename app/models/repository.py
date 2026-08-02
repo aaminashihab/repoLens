@@ -15,6 +15,7 @@ class RepositoryIndexRequest(BaseModel):
     github_token: str | None = Field(
         None,
         exclude=True,
+        max_length=512,
         description="Optional GitHub token for private repositories.",
     )
 

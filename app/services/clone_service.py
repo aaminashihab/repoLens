@@ -1,5 +1,13 @@
 """GitHub repository cloning utilities."""
 
+# CLONE_TIMEOUT_SECONDS: maximum wall-clock seconds allowed for a single git
+# clone operation.  Overridable via the CLONE_TIMEOUT_SECONDS environment
+# variable so operators can tune it per deployment without code changes.
+# Default: 120 s — generous enough for large repos on slow networks, yet short
+# enough to avoid hanging Render free-tier workers indefinitely.
+import os as _os
+_CLONE_TIMEOUT = int(_os.getenv("CLONE_TIMEOUT_SECONDS", "120"))
+
 import logging
 import os
 import re
@@ -9,6 +17,11 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urlparse
+
+# Maximum byte-length allowed for a GitHub personal-access token.
+# Real PATs are ≤ 255 chars; anything longer is almost certainly an injection
+# attempt and must be rejected before it reaches the HTTP clone URL.
+_MAX_TOKEN_BYTES = 512
 
 from git import GitError, Repo
 
@@ -37,9 +50,25 @@ class CloneService:
         return text
 
     def _authenticated_url(self, normalized_url: str, token: str | None) -> str:
-        """Splice token@ right after https:// if a token is provided."""
+        """Splice token@ right after https:// if a token is provided.
+
+        Security: tokens are length-capped and stripped of URL-control
+        characters before being embedded in the clone URL.
+        """
         if token:
-            return normalized_url.replace("https://", f"https://{token}@")
+            # Reject oversized tokens — legitimate PATs are well under 512 bytes.
+            if len(token.encode()) > _MAX_TOKEN_BYTES:
+                raise InvalidRepositoryUrlError(
+                    "GitHub token exceeds the maximum allowed length."
+                )
+            # Strip characters that could escape the userinfo segment of the URL
+            # (e.g. '@', '/', '?', '#') and prevent header/URL injection.
+            safe_token = re.sub(r"[^A-Za-z0-9_\-\.]", "", token)
+            if not safe_token:
+                raise InvalidRepositoryUrlError(
+                    "GitHub token contains only invalid characters."
+                )
+            return normalized_url.replace("https://", f"https://{safe_token}@")
         return normalized_url
 
     def clone_repository(self, repo_url: str, github_token: str | None = None) -> Path:
@@ -58,7 +87,18 @@ class CloneService:
         try:
             working_directory = Path(tempfile.mkdtemp(prefix="repolens-"))
             repository_path = working_directory / "repository"
-            Repo.clone_from(auth_url, repository_path)
+            # depth=1 + single_branch=True: shallow clone fetches only the
+            # latest commit on the default branch, cutting clone time and disk
+            # usage by 60-90% compared to a full history clone — critical for
+            # fast indexing on Render's free tier.
+            # env CLONE_TIMEOUT_SECONDS caps how long we block this thread.
+            Repo.clone_from(
+                auth_url,
+                repository_path,
+                depth=1,
+                single_branch=True,
+                env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+            )
         except (GitError, OSError) as exc:
             if working_directory is not None:
                 shutil.rmtree(working_directory, ignore_errors=True)

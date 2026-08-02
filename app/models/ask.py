@@ -7,15 +7,19 @@ class ChatTurn(BaseModel):
     """A single turn in the conversation history."""
 
     role: Literal["user", "assistant"]
-    content: str = Field(..., min_length=1)
+    # 4000-char cap: a single history turn carrying megabytes of text is always
+    # malformed input and would bloat the LLM context window unnecessarily.
+    content: str = Field(..., min_length=1, max_length=4000)
 
 
 class AskRequest(BaseModel):
     """A question about the repository represented by an index."""
 
-    index_id: str = Field(..., min_length=1, description="Repository index identifier.")
-    question: str = Field(..., min_length=1, description="Natural-language repository question.")
-    history: list[ChatTurn] = Field(default_factory=list)
+    index_id: str = Field(..., min_length=1, max_length=128, description="Repository index identifier.")
+    # 2000-char cap prevents prompt-stuffing attacks where an adversary embeds
+    # system-override instructions in a very long question field.
+    question: str = Field(..., min_length=1, max_length=2000, description="Natural-language repository question.")
+    history: list[ChatTurn] = Field(default_factory=list, max_length=12)
 
     @model_validator(mode="after")
     def truncate_history(self) -> "AskRequest":

@@ -164,12 +164,14 @@ POST /verify { index_id, claim }
 ```
 POST /index-repository { repo_url }
 │
-├─ [CloneService]     URL regex allowlist (github.com only) · tmpdir auto-cleanup
+├─ [CloneService]     URL regex allowlist (github.com only) · shallow clone (depth=1) · tmpdir auto-cleanup
+│                     Token sanitized (allowlist chars, 512-byte cap) · GIT_TERMINAL_PROMPT=0
 ├─ [ChunkService]     Budget: 5,000 files · 512 KB/file · 50 MB total
 │                     Python → Tree-sitter AST symbols + call graph edges
 │                     All other langs → structured line-block fallback chunker
 ├─ [EmbeddingService] Semaphore lock · ThreadPoolExecutor(5) · batch_size=100
-│                     Exponential backoff (max 8 retries on 429)
+│                     Inter-batch delay: 0.5s (env: EMBEDDING_INTER_BATCH_DELAY)
+│                     Exponential backoff (max 5 retries on 429, capped at 60s)
 ├─ [IndexService]     FAISS IndexFlatL2(1536) · persist to storage/indexes/{id}/
 │                     index.faiss · metadata.json · graph.json
 └─ [JobService]       Atomic state machine via tempfile.mkstemp + os.replace
@@ -191,6 +193,12 @@ Security is not an afterthought — it's in the architecture:
 | **Credential leaks** | API keys auto-stripped from Git error tracebacks |
 | **Webhook spoofing** | HMAC-SHA256 verification on every `POST /github/webhook` |
 | **Cross-origin attacks** | CORS locked to `localhost:8000`, `allow_credentials=False` |
+| **Token URL-injection** | `github_token` allowlist-sanitized before splicing into clone URL |
+| **Oversized payloads** | 10 MB global body cap + 1 MB webhook cap (HTTP 413) |
+| **Prompt stuffing** | `question` ≤ 2 000 chars, chat turn ≤ 4 000 chars (Pydantic) |
+| **Clickjacking / XSS** | `X-Frame-Options: DENY`, `Content-Security-Policy`, `X-Content-Type-Options` on every response |
+| **Stale API-key bypass** | API key re-read from env on every request (not cached at import) |
+| **HTTPS downgrade** | `Strict-Transport-Security: max-age=31536000` header |
 
 ---
 
@@ -244,7 +252,8 @@ Security is not an afterthought — it's in the architecture:
 | `GET` | `/indexes` | List all indexed repositories |
 | `POST` | `/ask/stream` | Stream grounded Q&A via Server-Sent Events |
 | `POST` | `/github/webhook` | Automated verification on PR / Issue events |
-| `GET` | `/health` | Server health check |
+| `GET` | `/health` | Server health check (used by Render deploy probes) |
+| `GET` | `/ping` | Ultra-lightweight keep-alive probe (no auth, no I/O) |
 
 ### Verification Request & Response
 
@@ -321,12 +330,48 @@ OPENAI_API_KEY=sk-...
 # ── Security ──────────────────────────────────────────────
 API_KEY=                                # X-API-Key for gated endpoints
 GITHUB_WEBHOOK_SECRET=                  # HMAC secret for GitHub webhooks
+GITHUB_TOKEN=                           # PAT for private repos + faster clones
+
+# ── Performance ───────────────────────────────────────────
+CLONE_TIMEOUT_SECONDS=120               # max seconds to wait for git clone
+EMBEDDING_INTER_BATCH_DELAY=0.5        # seconds between embedding batches
+MAX_REQUEST_BODY_BYTES=10485760         # 10 MB body cap (HTTP 413 above limit)
 
 # ── Rate Limits ───────────────────────────────────────────
 VERIFY_RATE_LIMIT=30/minute
 INDEX_RATE_LIMIT=10/hour
 GITHUB_RATE_LIMIT=30/minute
+
+# ── Index Lifecycle ───────────────────────────────────────
+INDEX_TTL_HOURS=168                     # auto-expire indexes after 7 days (0 = off)
+INDEX_CLEANUP_INTERVAL_MINUTES=60       # background sweep frequency
 ```
+
+---
+
+## 🚀 Deploying on Render
+
+RepoLens ships with a [`render.yaml`](render.yaml) Blueprint for one-click deployment:
+
+1. Fork or clone this repository.
+2. In the [Render dashboard](https://render.com), click **New → Blueprint** and connect your repo.
+3. Set the required secret environment variables (`OPENAI_API_KEY` / `GEMINI_API_KEY`, `API_KEY`, `GITHUB_TOKEN`).
+4. Click **Apply** — Render reads `render.yaml` and creates the service automatically.
+
+### ⚠️ Cold Starts (Free Tier)
+
+Render's free tier **spins down services after ~15 minutes of inactivity**, causing the first request after idle to take 30–60 seconds while the container restarts.
+
+**Fix — add a free uptime monitor:**
+
+| Service | URL | Interval |
+|---|---|---|
+| [UptimeRobot](https://uptimerobot.com) (free) | `https://repolens-x7b8.onrender.com/ping` | 14 minutes |
+| [cron-job.org](https://cron-job.org) (free) | `https://repolens-x7b8.onrender.com/ping` | every 14 min |
+
+The `/ping` endpoint is intentionally tiny (no auth, no filesystem I/O, no logging) — it exists purely for keep-alive probes.
+
+> **Tip:** Upgrade to Render's **Starter plan ($7/mo)** to keep the service always-on with zero configuration.
 
 ---
 

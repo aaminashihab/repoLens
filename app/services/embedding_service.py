@@ -38,11 +38,15 @@ class EmbeddingService:
     """Create embeddings for source chunks in sequential, rate-limit-aware batches."""
 
     # Maximum retries per batch when the API returns 429 RESOURCE_EXHAUSTED.
-    _MAX_RETRIES = 8
+    _MAX_RETRIES = 5
     # Seconds to wait between batches to stay within the free-tier quota.
-    # We use a short default delay of 2.0s to process rapidly, and rely on the
-    # exponential backoff handler if we actually receive a 429 rate limit.
-    _INTER_BATCH_DELAY = 2.0
+    # Overridable via EMBEDDING_INTER_BATCH_DELAY env var (float, seconds).
+    # Default 0.5 s is safe for most providers; raise it only if you consistently
+    # hit 429s on a paid-tier key with very large repos.
+    _INTER_BATCH_DELAY: float = float(os.getenv("EMBEDDING_INTER_BATCH_DELAY", "0.5"))
+    # Hard ceiling on exponential backoff (seconds) to prevent retry waits from
+    # lasting many minutes on a free-tier Render service.
+    _MAX_BACKOFF_SECONDS: float = 60.0
 
     def __init__(
         self,
@@ -141,7 +145,10 @@ class EmbeddingService:
                 if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
                     # Honour the retry-delay hint from the API when present.
                     base_delay = self._parse_retry_delay(error_str, default=30.0)
-                    backoff = base_delay * (1.5 ** attempt)
+                    raw_backoff = base_delay * (1.5 ** attempt)
+                    # Cap backoff to avoid blocking a Render free-tier worker
+                    # for many minutes on persistent rate-limit storms.
+                    backoff = min(raw_backoff, self._MAX_BACKOFF_SECONDS)
                     logger.warning(
                         f"Gemini rate-limit hit on batch starting at chunk {start_index}; "
                         f"retrying in {backoff:.1f}s (attempt {attempt + 1}/{self._MAX_RETRIES})",

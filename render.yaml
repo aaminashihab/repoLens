@@ -1,0 +1,118 @@
+# render.yaml — Render deployment configuration for RepoLens
+# Docs: https://render.com/docs/yaml-spec
+#
+# HOW TO USE
+# ----------
+# 1. Push this file to the root of your GitHub repository.
+# 2. In the Render dashboard, click "New → Blueprint" and connect your repo.
+# 3. Render will read this file and create the service automatically.
+# 4. Set the secret environment variables listed under `envVars` below
+#    (those marked `sync: false`) in the Render dashboard or via the CLI.
+#
+# KEEP-ALIVE (Free Tier)
+# ----------------------
+# Render free-tier services spin down after ~15 minutes of inactivity.
+# To prevent cold starts, configure an external uptime monitor to ping
+# the /ping endpoint every 14 minutes:
+#
+#   Service : UptimeRobot / BetterStack / cron-job.org (free tier)
+#   URL     : https://<your-service>.onrender.com/ping
+#   Interval: 14 minutes
+#
+# Alternatively, upgrade to the Render Starter plan ($7/mo) for always-on.
+
+services:
+  - type: web
+    name: repolens
+    runtime: python
+    region: oregon        # choose the region closest to your users
+    plan: free            # change to "starter" for always-on ($7/mo)
+
+    # Render runs your app with this command.
+    # --workers 1 keeps memory usage low on the free tier (512 MB RAM).
+    # --timeout 120 gives long-running clone + embedding jobs time to start
+    #   reporting progress before Gunicorn/uvicorn kills the request.
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1 --timeout-keep-alive 120
+
+    # Health check: Render will probe /health every 30 seconds after deploy.
+    # The service is only marked "healthy" (and traffic routed to it) once
+    # this endpoint returns HTTP 200.  /health is lightweight (no I/O).
+    healthCheckPath: /health
+
+    # Persistent disk: FAISS indexes and job status files are written to
+    # storage/.  On the free tier, the filesystem is ephemeral — every
+    # deploy wipes it.  Mount a persistent disk so indexed repos survive
+    # redeployments.  Remove this block if you have no paid plan.
+    #
+    # NOTE: Persistent disks require at least the Starter plan.
+    # disk:
+    #   name: repolens-storage
+    #   mountPath: /opt/render/project/src/storage
+    #   sizeGB: 1
+
+    envVars:
+      # ------------------------------------------------------------------ #
+      # LLM provider — pick ONE block and delete the other.                 #
+      # ------------------------------------------------------------------ #
+
+      # --- Option A: OpenAI (default) ---
+      - key: LLM_PROVIDER
+        value: openai
+      - key: OPENAI_API_KEY
+        sync: false          # set in Render dashboard → Environment → Secret
+
+      # --- Option B: Google Gemini ---
+      # - key: LLM_PROVIDER
+      #   value: gemini
+      # - key: GEMINI_API_KEY
+      #   sync: false
+
+      # ------------------------------------------------------------------ #
+      # Optional but strongly recommended                                   #
+      # ------------------------------------------------------------------ #
+
+      # API key that guards all /index-repository, /ask, /verify endpoints.
+      # Generate a strong random string: python -c "import secrets; print(secrets.token_hex(32))"
+      - key: API_KEY
+        sync: false
+
+      # GitHub personal access token — enables authenticated (faster) clones
+      # and raises the API rate limit from 60 to 5000 requests/hour.
+      # Scopes needed for public repos: (none — public clones work without it)
+      # Scopes needed for private repos: repo
+      - key: GITHUB_TOKEN
+        sync: false
+
+      # Secret used to verify GitHub webhook payloads.  Set the same value
+      # in your GitHub repo → Settings → Webhooks → Secret.
+      - key: GITHUB_WEBHOOK_SECRET
+        sync: false
+
+      # ------------------------------------------------------------------ #
+      # Performance tuning (optional, safe to leave at defaults)            #
+      # ------------------------------------------------------------------ #
+
+      # Maximum seconds to wait for a git clone before aborting.
+      # Default: 120 s.  Raise for very large repos on slow networks.
+      - key: CLONE_TIMEOUT_SECONDS
+        value: "120"
+
+      # Seconds between embedding API batch calls.
+      # Default: 0.5 s.  Raise to 2.0 if you hit 429 rate limits frequently.
+      - key: EMBEDDING_INTER_BATCH_DELAY
+        value: "0.5"
+
+      # How long (hours) before an index is automatically expired and deleted.
+      # Default: 168 h (7 days).  Set to 0 to disable expiry.
+      - key: INDEX_TTL_HOURS
+        value: "168"
+
+      # Maximum incoming request body size in bytes (default: 10 MB).
+      - key: MAX_REQUEST_BODY_BYTES
+        value: "10485760"
+
+      # CORS origins allowed to call the API from a browser.
+      # Separate multiple origins with commas.
+      # Example: https://myapp.com,https://staging.myapp.com
+      - key: CORS_ORIGINS
+        value: ""        # leave blank to default to same-origin only
