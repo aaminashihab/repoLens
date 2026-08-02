@@ -8,7 +8,6 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 from git import GitError
 
-import app.api.dependencies as api_deps
 from app.main import app
 from app.services.clone_service import (
     CloneService,

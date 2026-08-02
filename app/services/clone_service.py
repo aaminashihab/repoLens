@@ -6,6 +6,7 @@
 # Default: 120 s — generous enough for large repos on slow networks, yet short
 # enough to avoid hanging Render free-tier workers indefinitely.
 import os as _os
+
 _CLONE_TIMEOUT = int(_os.getenv("CLONE_TIMEOUT_SECONDS", "120"))
 
 import logging
