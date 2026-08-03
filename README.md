@@ -18,7 +18,7 @@ Instead of giving you an AI opinion, RepoLens finds the **most relevant lines of
 
 [![Live Demo](https://img.shields.io/badge/🚀_Live_Demo-repolens--x7b8.onrender.com-6366f1?style=for-the-badge)](https://repolens-x7b8.onrender.com/)
 [![Tests](https://img.shields.io/badge/✅_Tests-93_Passing-22c55e?style=for-the-badge)](#testing--quality-assurance)
-[![Python](https://img.shields.io/badge/Python-3.12-3b82f6?style=for-the-badge&logo=python&logoColor=white)](#tech-stack)
+[![Python](https://img.shields.io/badge/Python-3.10-3b82f6?style=for-the-badge&logo=python&logoColor=white)](#tech-stack)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](#tech-stack)
 [![CI](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml)
 
@@ -415,7 +415,7 @@ python -m app.core.evaluator
 | Metric                                  | Value                             |
 +-----------------------------------------+-----------------------------------+
 | Precision                               | 84.2%                             |
-| Recall                                  | 81.5%                             |
+| Recall                                  | 78.5%                             |
 | Hallucination Rate (Uncited Claims)     | 0.0%                              |
 | Citation Accuracy                       | 92.3%                             |
 | Average Latency per Claim               | 245.0 ms                          |
@@ -426,7 +426,7 @@ python -m app.core.evaluator
 | Retrieval Strategy           | Precision            | Citation Accuracy    |
 +------------------------------+----------------------+----------------------+
 | Hybrid (Vector + AST Graph)  | 84.2%                | 92.3%                |
-| Vector-Only Baseline         | 62.5%                | 71.0%                |
+| Vector-Only Baseline         | 61.8%                | 71.0%                |
 +------------------------------+----------------------+----------------------+
 ```
 
@@ -450,7 +450,7 @@ app/
 │   ├── graph.py                ← RepositoryGraph, CodeNode, GraphEdge
 │   ├── guardrails.py           ← GuardrailValidator (3 anti-hallucination rules)
 │   ├── evaluator.py            ← RepoVerify-Bench evaluation framework
-│   ├── memory_heuristics.py    ← MemoryHeuristicEngine (12 static regex rules)
+│   ├── memory_heuristics.py    ← MemoryHeuristicEngine (7 static regex rules)
 │   └── validation.py           ← validate_safe_id() path traversal guard
 ├── services/
 │   ├── clone_service.py        ← GitHub URL sanitization + GitPython clone
@@ -481,13 +481,13 @@ static/
 
 | Layer | Technology | Notes |
 |---|---|---|
-| **API Framework** | FastAPI (Python 3.12) | Async REST, structured logging, health endpoint |
+| **API Framework** | FastAPI (Python 3.10) | Async REST, structured logging, health endpoint |
 | **AST Parsing** | Tree-sitter + Regex | Full Python AST; JS/TS/Go/Rust/Java/C++ fallback |
 | **Call Graph** | Custom `RepositoryGraph` | N-hop traversal with exponential depth decay |
 | **Vector Search** | FAISS CPU `IndexFlatL2` | Persistent `.faiss` + `.json` storage per index |
 | **LLM Reasoning** | OpenAI GPT-4o-mini / Gemini 2.5 Flash | Configurable via `.env` |
 | **Frontend** | TypeScript SPA | 0 `tsc` errors, DOMPurify XSS defense |
-| **Testing** | pytest | 84 passing tests |
+| **Testing** | pytest | 93 passing tests |
 | **CI** | GitHub Actions | Auto-runs on push & PR |
 
 ---
