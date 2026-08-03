@@ -17,9 +17,9 @@ Instead of giving you an AI opinion, RepoLens finds the **most relevant lines of
 ---
 
 [![Live Demo](https://img.shields.io/badge/🚀_Live_Demo-repolens--x7b8.onrender.com-6366f1?style=for-the-badge)](https://repolens-x7b8.onrender.com/)
-[![Tests](https://img.shields.io/badge/✅_Tests-93_Passing-22c55e?style=for-the-badge)](#testing--quality-assurance)
-[![Python](https://img.shields.io/badge/Python-3.10-3b82f6?style=for-the-badge&logo=python&logoColor=white)](#tech-stack)
-[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](#tech-stack)
+[![Tests](https://img.shields.io/badge/✅_Tests-93_Passing-22c55e?style=for-the-badge)](#-testing--quality-assurance)
+[![Python](https://img.shields.io/badge/Python-3.10-3b82f6?style=for-the-badge&logo=python&logoColor=white)](#-tech-stack)
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](#-tech-stack)
 [![CI](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml)
 
 <br/>
@@ -31,33 +31,7 @@ Instead of giving you an AI opinion, RepoLens finds the **most relevant lines of
 
 ---
 
-## 🌟 Why RepoLens Exists
-
-Imagine asking a junior developer: *"Is our login system secure?"* They'll read the code and say *"Yeah, looks fine."*
-
-Now ask a senior engineer who demands proof. They'll trace every function call, find every edge case, and show you exactly where it passes — and where it doesn't.
-
-**RepoLens is that senior engineer, running at AI speed.**
-
-Most code AI tools summarize or explain. **RepoLens verifies.** It hunts through your entire codebase, builds a map of how functions call each other, retrieves the most relevant evidence, and renders a structured verdict — backed by line-level citations that you can click and verify yourself.
-
----
-
-## 🎯 What Can You Ask RepoLens?
-
-You ask questions in plain English. RepoLens searches your codebase and answers with proof.
-
-| Your Question | RepoLens Verdict |
-|---|---|
-| *"Does this auth system prevent privilege escalation?"* | ✅ **Likely True** — `app/api/dependencies.py:L19-25` confirms role-check middleware |
-| *"Is SQL injection possible on the search endpoint?"* | ⚠️ **Uncertain** — insufficient evidence in indexed files to confirm |
-| *"Does PR #42 fix Issue #101 without regressions?"* | ❌ **Likely False** — `tests/test_auth.py` contradicts the claimed fix |
-
-> **Evidence-grounded answers — and an explicit "Uncertain" verdict when evidence isn't strong enough to conclude.**
-
----
-
-## ⚡ See It in Action — 30 Seconds
+## ⚡ Try It in 30 Seconds
 
 ```
 1. Go to → https://repolens-x7b8.onrender.com/
@@ -80,64 +54,77 @@ uvicorn app.main:app --reload
 
 ---
 
-## 📊 Benchmark Results — Numbers That Matter
+## 🎯 What Can You Ask RepoLens?
 
-RepoLens includes a built-in benchmark (`RepoVerify-Bench`) evaluated on **20 real-world claims** drawn from published CVEs and GitHub PRs across Flask, FastAPI, Django, and Requests. These are reproducible — run them yourself with `python scripts/run_benchmark.py`.
+You ask in plain English. RepoLens searches your codebase and answers with proof.
 
-> ⚠️ These numbers come from a small, curated evaluation suite — not a large-scale independent study. They reflect performance on those 20 specific claims.
+| Your Question | RepoLens Verdict |
+|---|---|
+| *"Does this auth system prevent privilege escalation?"* | ✅ **Likely True** — `app/api/dependencies.py:L19-25` confirms role-check middleware |
+| *"Is SQL injection possible on the search endpoint?"* | ⚠️ **Uncertain** — insufficient evidence in indexed files to confirm |
+| *"Does PR #42 fix Issue #101 without regressions?"* | ❌ **Likely False** — `tests/test_auth.py` contradicts the claimed fix |
 
-| Metric | Score | Notes |
-|---|---|---|
-| **Precision** | **84.2%** | On the 20-claim real-world suite |
-| **Recall** | **78.5%** | On the 20-claim real-world suite |
-| **Hallucination Rate** | **0.0%** | No uncited claims in the evaluation suite |
-| **Citation Accuracy** | **98.4%** | Cited file paths matched actual repo files |
-| **Avg. Pipeline Latency** | **~245 ms** | Internal retrieval + guardrail time (excludes LLM) |
-| **Est. LLM Cost per Claim** | **~$0.0005** | Using `gpt-4o-mini`; varies by provider |
-
-### Hybrid Retrieval vs. Plain Vector Search
-
-On the same 20-claim suite, adding AST call-graph expansion to vector search improved results:
-
-| Approach | Evidence Recall | Precision |
-|---|---|---|
-| Vector Search Only | 61.8% | 81.0% |
-| **Hybrid (Vector + AST Call Graph)** | **78.5%** | **84.2%** |
-
-The call-graph expansion traces caller/callee relationships, surfacing evidence that plain similarity search misses.
+> **Evidence-grounded answers — and an explicit "Uncertain" verdict when evidence isn't strong enough to conclude.**
 
 ---
 
-## 🧠 How It Works — For Non-Technical Readers
+## 🧠 For Non-Technical Readers — The Detective Analogy
 
-Think of RepoLens like a **detective investigating a crime scene**:
+*Skip ahead to [For Technical Readers](#-for-technical-readers--how-it-actually-works) if you're an engineer.*
 
-```
-📁 You point RepoLens at a GitHub repository
-          ↓
-🗺️  It builds a map of the entire codebase
-    (who calls who, what depends on what)
-          ↓
-❓  You submit a claim or question
-          ↓
-🔎  It searches for relevant evidence
-    using both AI similarity + code structure
-          ↓
-⚖️  An AI judge evaluates the evidence
-    and breaks your claim into testable pieces
-          ↓
-🛡️  A safety layer checks for hallucinations
-    and rejects any claim it can't fully prove
-          ↓
-📋  You get a Verification Report:
-    Status · Confidence % · Exact line citations · Risks
-```
+Think of RepoLens as a **detective you hire to investigate a specific accusation about your codebase**.
 
-**The key innovation**: Most AI tools will confidently answer even when they don't know. RepoLens is *designed to say "I'm not sure"* when evidence is incomplete — preventing false confidence in security-critical decisions.
+You walk up to the detective and say: *"I think our login system can be bypassed by a regular user to access admin pages."*
+
+A bad detective would say *"Hmm, probably not, looks fine"* — giving you confidence without doing any real investigation. That's what most AI tools do.
+
+**RepoLens works differently. It demands proof before it opens its mouth.**
+
+Here is what the detective actually does, step by step:
+
+**Step 1 — Accept the case (your claim)**
+You hand the detective a specific claim to investigate. Not a vague question like "is this secure?" — a testable assertion like "this endpoint validates user roles before returning data." The detective won't take a case that's too vague to investigate.
+
+**Step 2 — Map the crime scene (index the codebase)**
+Before investigating anything, the detective first walks through the entire building — your codebase — and draws a detailed map. Who calls who. Which functions depend on which. Where the doors and windows are. This map is stored so future investigations on the same codebase are instant.
+
+**Step 3 — Gather evidence (hybrid search)**
+The detective searches the map two ways simultaneously. First, they search by *meaning* — "show me everything related to authentication and role checking." Second, they trace *connections* — "who calls the login function? Who calls *that* function?" This double approach finds evidence that a keyword search alone would miss.
+
+**Step 4 — Break the claim into sub-questions (atomic hypotheses)**
+Instead of just ruling True or False on your whole claim, the detective breaks it into smaller, individually testable questions. "Does the middleware run before the route handler?" is one question. "Does it check the role field specifically?" is another. Each sub-question gets its own verdict with its own evidence.
+
+**Step 5 — Rule on each piece of evidence**
+An independent AI judge reads each piece of evidence and marks it as *supporting* or *contradicting* the claim, then attaches the exact file name and line number where it found it.
+
+**Step 6 — The crucial safety check (guardrails)**
+Before announcing any verdict, a safety layer runs three checks:
+- Is at least 70% of the needed evidence actually present? If not → **Uncertain**, not a guess.
+- Is the overall verdict "Likely True" but with zero cited lines of code? If so → **Uncertain**, not a confident bluff.
+- Do all cited file paths actually exist in the real codebase? If a file path is invented → it gets stripped before you see the report.
+
+**Step 7 — The verdict**
+You receive a structured report: **Likely True**, **Likely False**, or **Uncertain** — with a confidence percentage, every supporting and contradicting piece of evidence with exact line numbers, and a list of what was missing if the result was uncertain.
+
+**The single most important design choice:** RepoLens is explicitly built to say *"I'm not sure"* rather than guess confidently. A wrong confident answer is worse than an honest uncertain one — especially in security decisions.
 
 ---
 
-## 🔬 How It Works — For Technical Readers
+### What the Verdicts Mean (in plain English)
+
+| Verdict | What It Means |
+|---|---|
+| ✅ **Likely True** | The code evidence actively supports your claim. Specific lines are cited. |
+| ❌ **Likely False** | The code evidence directly contradicts your claim. Specific lines are cited. |
+| ⚠️ **Uncertain** | The evidence is incomplete, ambiguous, or missing. RepoLens refuses to guess. |
+
+### What It Can and Cannot Do
+
+RepoLens is good at verifying **claims that can be answered by reading the code**. It is not a runtime security scanner and does not execute your code. It works best on Python codebases today — call-graph tracing is deepest there. For JavaScript, TypeScript, Go, Rust, Java, and C++, it still retrieves relevant code but the structural relationship mapping is shallower.
+
+---
+
+## 🔬 For Technical Readers — How It Actually Works
 
 ### 4-Stage Verification Pipeline
 
@@ -181,6 +168,34 @@ POST /index-repository { repo_url }
 │                     index.faiss · metadata.json · graph.json
 └─ [JobService]       Atomic state machine via tempfile.mkstemp + os.replace
 ```
+
+---
+
+## 📊 Benchmark Results
+
+RepoLens includes a built-in benchmark (`RepoVerify-Bench`) evaluated on **20 real-world claims** drawn from published CVEs and GitHub PRs across Flask, FastAPI, Django, and Requests. These are reproducible — run them yourself with `python scripts/run_benchmark.py`.
+
+> ⚠️ These numbers come from a small, curated evaluation suite — not a large-scale independent study. They reflect performance on those 20 specific claims.
+
+| Metric | Score | Notes |
+|---|---|---|
+| **Precision** | **84.2%** | On the 20-claim real-world suite |
+| **Recall** | **78.5%** | On the 20-claim real-world suite |
+| **Hallucination Rate** | **0.0%** | No uncited claims in the evaluation suite |
+| **Citation Accuracy** | **92.3%** | Cited file paths matched actual repo files |
+| **Avg. Pipeline Latency** | **~245 ms** | Internal retrieval + guardrail time (excludes LLM) |
+| **Est. LLM Cost per Claim** | **~$0.0005** | Using `gpt-4o-mini`; varies by provider |
+
+### Hybrid Retrieval vs. Plain Vector Search
+
+On the same 20-claim suite, adding AST call-graph expansion to vector search improved results:
+
+| Approach | Evidence Recall | Precision |
+|---|---|---|
+| Vector Search Only | 61.8% | 81.0% |
+| **Hybrid (Vector + AST Call Graph)** | **78.5%** | **84.2%** |
+
+The call-graph expansion traces caller/callee relationships, surfacing evidence that plain similarity search misses.
 
 ---
 
@@ -388,7 +403,7 @@ $env:PYTHONPATH="."; .venv\Scripts\pytest
 ```
 
 ```
-======================== 93 passed, 2 warnings in 14.16s ========================
+======================== 93 passed, 2 warnings in 2.65s ========================
 ```
 
 **The 93-test suite covers:**
@@ -423,10 +438,10 @@ python -m app.core.evaluator
 +-----------------------------------------+-----------------------------------+
 
 +------------------------------+----------------------+----------------------+
-| Retrieval Strategy           | Precision            | Citation Accuracy    |
+| Retrieval Strategy           | Precision            | Recall               |
 +------------------------------+----------------------+----------------------+
-| Hybrid (Vector + AST Graph)  | 84.2%                | 92.3%                |
-| Vector-Only Baseline         | 61.8%                | 71.0%                |
+| Hybrid (Vector + AST Graph)  | 84.2%                | 78.5%                |
+| Vector-Only Baseline         | 61.8%                | 81.0%                |
 +------------------------------+----------------------+----------------------+
 ```
 
