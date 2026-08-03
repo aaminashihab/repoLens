@@ -2,7 +2,7 @@
 
 <img src="static/repolens_logo.png" alt="RepoLens Logo" width="120"/>
 
-# 🔍 RepoLens
+# RepoLens
 
 ### *The AI that doesn't just read your code — it fact-checks it.*
 
@@ -16,10 +16,10 @@ Instead of giving you an AI opinion, RepoLens finds the **most relevant lines of
 
 ---
 
-[![Live Demo](https://img.shields.io/badge/🚀_Live_Demo-repolens--x7b8.onrender.com-6366f1?style=for-the-badge)](https://repolens-x7b8.onrender.com/)
-[![Tests](https://img.shields.io/badge/✅_Tests-93_Passing-22c55e?style=for-the-badge)](#-testing--quality-assurance)
-[![Python](https://img.shields.io/badge/Python-3.10-3b82f6?style=for-the-badge&logo=python&logoColor=white)](#-tech-stack)
-[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](#-tech-stack)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-repolens--x7b8.onrender.com-6366f1?style=for-the-badge)](https://repolens-x7b8.onrender.com/)
+[![Tests](https://img.shields.io/badge/Tests-93_Passing-22c55e?style=for-the-badge)](#testing--quality-assurance)
+[![Python](https://img.shields.io/badge/Python-3.10-3b82f6?style=for-the-badge&logo=python&logoColor=white)](#tech-stack)
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](#tech-stack)
 [![CI](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml)
 
 <br/>
@@ -31,7 +31,7 @@ Instead of giving you an AI opinion, RepoLens finds the **most relevant lines of
 
 ---
 
-## ⚡ Try It in 30 Seconds
+## Try It in 30 Seconds
 
 ```
 1. Go to → https://repolens-x7b8.onrender.com/
@@ -54,23 +54,23 @@ uvicorn app.main:app --reload
 
 ---
 
-## 🎯 What Can You Ask RepoLens?
+## What Can You Ask RepoLens?
 
 You ask in plain English. RepoLens searches your codebase and answers with proof.
 
 | Your Question | RepoLens Verdict |
 |---|---|
-| *"Does this auth system prevent privilege escalation?"* | ✅ **Likely True** — `app/api/dependencies.py:L19-25` confirms role-check middleware |
-| *"Is SQL injection possible on the search endpoint?"* | ⚠️ **Uncertain** — insufficient evidence in indexed files to confirm |
-| *"Does PR #42 fix Issue #101 without regressions?"* | ❌ **Likely False** — `tests/test_auth.py` contradicts the claimed fix |
+| *"Does this auth system prevent privilege escalation?"* | **Likely True** — `app/api/dependencies.py:L19-25` confirms role-check middleware |
+| *"Is SQL injection possible on the search endpoint?"* | **Uncertain** — insufficient evidence in indexed files to confirm |
+| *"Does PR #42 fix Issue #101 without regressions?"* | **Likely False** — `tests/test_auth.py` contradicts the claimed fix |
 
 > **Evidence-grounded answers — and an explicit "Uncertain" verdict when evidence isn't strong enough to conclude.**
 
 ---
 
-## 🧠 For Non-Technical Readers — The Detective Analogy
+## For Non-Technical Readers — The Detective Analogy
 
-*Skip ahead to [For Technical Readers](#-for-technical-readers--how-it-actually-works) if you're an engineer.*
+*Skip ahead to [For Technical Readers](#for-technical-readers--how-it-actually-works) if you're an engineer.*
 
 Think of RepoLens as a **detective you hire to investigate a specific accusation about your codebase**.
 
@@ -114,9 +114,9 @@ You receive a structured report: **Likely True**, **Likely False**, or **Uncerta
 
 | Verdict | What It Means |
 |---|---|
-| ✅ **Likely True** | The code evidence actively supports your claim. Specific lines are cited. |
-| ❌ **Likely False** | The code evidence directly contradicts your claim. Specific lines are cited. |
-| ⚠️ **Uncertain** | The evidence is incomplete, ambiguous, or missing. RepoLens refuses to guess. |
+| **Likely True** | The code evidence actively supports your claim. Specific lines are cited. |
+| **Likely False** | The code evidence directly contradicts your claim. Specific lines are cited. |
+| **Uncertain** | The evidence is incomplete, ambiguous, or missing. RepoLens refuses to guess. |
 
 ### What It Can and Cannot Do
 
@@ -124,7 +124,7 @@ RepoLens is good at verifying **claims that can be answered by reading the code*
 
 ---
 
-## 🔬 For Technical Readers — How It Actually Works
+## For Technical Readers — How It Actually Works
 
 ### 4-Stage Verification Pipeline
 
@@ -171,11 +171,11 @@ POST /index-repository { repo_url }
 
 ---
 
-## 📊 Benchmark Results
+## Benchmark Results
 
 RepoLens includes a built-in benchmark (`RepoVerify-Bench`) evaluated on **20 real-world claims** drawn from published CVEs and GitHub PRs across Flask, FastAPI, Django, and Requests. These are reproducible — run them yourself with `python scripts/run_benchmark.py`.
 
-> ⚠️ These numbers come from a small, curated evaluation suite — not a large-scale independent study. They reflect performance on those 20 specific claims.
+> Note: These numbers come from a small, curated evaluation suite — not a large-scale independent study. They reflect performance on those 20 specific claims.
 
 | Metric | Score | Notes |
 |---|---|---|
@@ -199,7 +199,7 @@ The call-graph expansion traces caller/callee relationships, surfacing evidence 
 
 ---
 
-## 🛡️ Security Hardening
+## Security Hardening
 
 Security is not an afterthought — it's in the architecture:
 
@@ -222,7 +222,7 @@ Security is not an afterthought — it's in the architecture:
 
 ---
 
-## 🏗️ System Architecture
+## System Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -261,7 +261,7 @@ Security is not an afterthought — it's in the architecture:
 
 ---
 
-## 🔌 API Reference
+## API Reference
 
 | Method | Endpoint | Description |
 |---|---|---|
@@ -331,7 +331,7 @@ curl -X POST http://localhost:8000/verify \
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 Create a `.env` file in the project root:
 
@@ -369,7 +369,7 @@ INDEX_CLEANUP_INTERVAL_MINUTES=60       # background sweep frequency
 
 ---
 
-## 🚀 Deploying on Render
+## Deploying on Render
 
 RepoLens ships with a [`render.yaml`](render.yaml) Blueprint for one-click deployment:
 
@@ -378,7 +378,7 @@ RepoLens ships with a [`render.yaml`](render.yaml) Blueprint for one-click deplo
 3. Set the required secret environment variables (`OPENAI_API_KEY` / `GEMINI_API_KEY`, `API_KEY`, `GITHUB_TOKEN`).
 4. Click **Apply** — Render reads `render.yaml` and creates the service automatically.
 
-### ⚠️ Cold Starts (Free Tier)
+### Cold Starts (Free Tier)
 
 Render's free tier **spins down services after ~15 minutes of inactivity**, causing the first request after idle to take 30–60 seconds while the container restarts.
 
@@ -395,7 +395,7 @@ The `/ping` endpoint is intentionally tiny (no auth, no filesystem I/O, no loggi
 
 ---
 
-## 🧪 Testing & Quality Assurance
+## Testing & Quality Assurance
 
 ```bash
 # Run the full test suite
@@ -407,11 +407,11 @@ $env:PYTHONPATH="."; .venv\Scripts\pytest
 ```
 
 **The 93-test suite covers:**
-- 🔐 Webhook HMAC signature verification & rate limiting
-- 🌲 AST call graph construction & N-hop traversal
-- 🛡️ Guardrail refusal logic & evidence completeness validation
-- 🔑 API key constant-time comparison & route authentication
-- 📐 Benchmark precision, recall & citation accuracy
+- Webhook HMAC signature verification & rate limiting
+- AST call graph construction & N-hop traversal
+- Guardrail refusal logic & evidence completeness validation
+- API key constant-time comparison & route authentication
+- Benchmark precision, recall & citation accuracy
 
 ### Reproduce Benchmark Results
 
@@ -447,7 +447,7 @@ python -m app.core.evaluator
 
 ---
 
-## 🗺️ Codebase Structure
+## Codebase Structure
 
 ```
 app/
@@ -492,7 +492,7 @@ static/
 
 ---
 
-## 🔭 Tech Stack
+## Tech Stack
 
 | Layer | Technology | Notes |
 |---|---|---|
@@ -507,21 +507,21 @@ static/
 
 ---
 
-## 🔮 Roadmap — v2
+## Roadmap — v2
 
 The core pipeline, security layer, and verification engine are **fully implemented and tested**. The following are infrastructure improvements for large-scale cloud deployment:
 
 | Feature | Status | Notes |
 |---|---|---|
-| Distributed vector storage | 🗓️ Planned | pgvector / Qdrant for multi-node clusters |
-| Distributed task queue | 🗓️ Planned | Celery + Redis (replaces in-process BackgroundTasks) |
-| Streaming `/verify` endpoint | 🗓️ Planned | SSE for real-time verification progress |
-| OpenTelemetry + Prometheus | 🗓️ Planned | Metrics for embedding latency, token usage |
-| GitHub App authentication | 🗓️ Planned | Fine-grained installation tokens (vs. PATs) |
+| Distributed vector storage | Planned | pgvector / Qdrant for multi-node clusters |
+| Distributed task queue | Planned | Celery + Redis (replaces in-process BackgroundTasks) |
+| Streaming `/verify` endpoint | Planned | SSE for real-time verification progress |
+| OpenTelemetry + Prometheus | Planned | Metrics for embedding latency, token usage |
+| GitHub App authentication | Planned | Fine-grained installation tokens (vs. PATs) |
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Pull requests are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting.
 
@@ -529,7 +529,7 @@ This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.
 
 ---
 
-## 📄 License
+## License
 
 MIT License — see [LICENSE](LICENSE) for full details.
 
@@ -537,8 +537,8 @@ MIT License — see [LICENSE](LICENSE) for full details.
 
 <div align="center">
 
-**Built with 🔍 structured evidence, explicit uncertainty, and reproducible benchmarks.**
+**Built with structured evidence, explicit uncertainty, and reproducible benchmarks.**
 
-[🚀 Try the Live Demo](https://repolens-x7b8.onrender.com/) · [⭐ Star on GitHub](https://github.com/aaminashihab/repoLens) · [🐛 Report a Bug](https://github.com/aaminashihab/repoLens/issues)
+[Try the Live Demo](https://repolens-x7b8.onrender.com/) · [Star on GitHub](https://github.com/aaminashihab/repoLens) · [Report a Bug](https://github.com/aaminashihab/repoLens/issues)
 
 </div>
