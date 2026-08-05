@@ -45,7 +45,11 @@ Or run it locally:
 ```bash
 git clone https://github.com/aaminashihab/repoLens.git
 cd repoLens
-python -m venv .venv && .venv\Scripts\activate
+python -m venv .venv
+# Windows (PowerShell / cmd)
+.venv\Scripts\activate
+# macOS / Linux
+source .venv/bin/activate
 pip install -r requirements.txt
 # Add your API key to .env (see Configuration section)
 uvicorn app.main:app --reload
@@ -60,67 +64,13 @@ You ask in plain English. RepoLens searches your codebase and answers with proof
 
 | Your Question | RepoLens Verdict |
 |---|---|
-| *"Does this auth system prevent privilege escalation?"* | **Likely True** — `app/api/dependencies.py:L19-25` confirms role-check middleware |
+| *"Does this auth system prevent privilege escalation?"* | **Likely True** — `app/api/dependencies.py:L45-52` confirms role-check middleware |
 | *"Is SQL injection possible on the search endpoint?"* | **Uncertain** — insufficient evidence in indexed files to confirm |
 | *"Does PR #42 fix Issue #101 without regressions?"* | **Likely False** — `tests/test_auth.py` contradicts the claimed fix |
 
 > **Evidence-grounded answers — and an explicit "Uncertain" verdict when evidence isn't strong enough to conclude.**
 
 ---
-
-## For Non-Technical Readers — The Detective Analogy
-
-*Skip ahead to [For Technical Readers](#for-technical-readers--how-it-actually-works) if you're an engineer.*
-
-Think of RepoLens as a **detective you hire to investigate a specific accusation about your codebase**.
-
-You walk up to the detective and say: *"I think our login system can be bypassed by a regular user to access admin pages."*
-
-A bad detective would say *"Hmm, probably not, looks fine"* — giving you confidence without doing any real investigation. That's what most AI tools do.
-
-**RepoLens works differently. It demands proof before it opens its mouth.**
-
-Here is what the detective actually does, step by step:
-
-**Step 1 — Accept the case (your claim)**
-You hand the detective a specific claim to investigate. Not a vague question like "is this secure?" — a testable assertion like "this endpoint validates user roles before returning data." The detective won't take a case that's too vague to investigate.
-
-**Step 2 — Map the crime scene (index the codebase)**
-Before investigating anything, the detective first walks through the entire building — your codebase — and draws a detailed map. Who calls who. Which functions depend on which. Where the doors and windows are. This map is stored so future investigations on the same codebase are instant.
-
-**Step 3 — Gather evidence (hybrid search)**
-The detective searches the map two ways simultaneously. First, they search by *meaning* — "show me everything related to authentication and role checking." Second, they trace *connections* — "who calls the login function? Who calls *that* function?" This double approach finds evidence that a keyword search alone would miss.
-
-**Step 4 — Break the claim into sub-questions (atomic hypotheses)**
-Instead of just ruling True or False on your whole claim, the detective breaks it into smaller, individually testable questions. "Does the middleware run before the route handler?" is one question. "Does it check the role field specifically?" is another. Each sub-question gets its own verdict with its own evidence.
-
-**Step 5 — Rule on each piece of evidence**
-An independent AI judge reads each piece of evidence and marks it as *supporting* or *contradicting* the claim, then attaches the exact file name and line number where it found it.
-
-**Step 6 — The crucial safety check (guardrails)**
-Before announcing any verdict, a safety layer runs three checks:
-- Is at least 70% of the needed evidence actually present? If not → **Uncertain**, not a guess.
-- Is the overall verdict "Likely True" but with zero cited lines of code? If so → **Uncertain**, not a confident bluff.
-- Do all cited file paths actually exist in the real codebase? If a file path is invented → it gets stripped before you see the report.
-
-**Step 7 — The verdict**
-You receive a structured report: **Likely True**, **Likely False**, or **Uncertain** — with a confidence percentage, every supporting and contradicting piece of evidence with exact line numbers, and a list of what was missing if the result was uncertain.
-
-**The single most important design choice:** RepoLens is explicitly built to say *"I'm not sure"* rather than guess confidently. A wrong confident answer is worse than an honest uncertain one — especially in security decisions.
-
----
-
-### What the Verdicts Mean (in plain English)
-
-| Verdict | What It Means |
-|---|---|
-| **Likely True** | The code evidence actively supports your claim. Specific lines are cited. |
-| **Likely False** | The code evidence directly contradicts your claim. Specific lines are cited. |
-| **Uncertain** | The evidence is incomplete, ambiguous, or missing. RepoLens refuses to guess. |
-
-### What It Can and Cannot Do
-
-RepoLens is good at verifying **claims that can be answered by reading the code**. It is not a runtime security scanner and does not execute your code. It works best on Python codebases today — call-graph tracing is deepest there. For JavaScript, TypeScript, Go, Rust, Java, and C++, it still retrieves relevant code but the structural relationship mapping is shallower.
 
 ---
 
@@ -303,10 +253,10 @@ curl -X POST http://localhost:8000/verify \
   "supporting_evidence": [
     {
       "file_path": "app/api/dependencies.py",
-      "line_range": "L19-L25",
-      "symbol_name": "require_api_key",
-      "snippet": "async def require_api_key(x_api_key: str | None = Header(...)) -> None:",
-      "relevance": "Checks incoming API header against configured key and raises 401 on failure."
+      "line_range": "L45-L52",
+      "symbol_name": "require_role",
+      "snippet": "async def require_role(required: str, user: UserContext = Depends(get_current_user)) -> None:",
+      "relevance": "Checks authenticated user's role against the required authorization level and raises 403 on mismatch."
     }
   ],
   "potential_risks": [],
@@ -321,11 +271,11 @@ curl -X POST http://localhost:8000/verify \
 // Illustrative example
 {
   "status": "verification_completed",
-  "pr_number": "42",
-  "index_id": "idx-123",
-  "verification_status": "Likely True",
-  "confidence_score": 74.0,
-  "supporting_evidence_count": 3
+  "pr_number": "99",
+  "index_id": "idx-456",
+  "verification_status": "Likely False",
+  "confidence_score": 71.0,
+  "supporting_evidence_count": 1
 }
 ```
 
@@ -397,9 +347,14 @@ The `/ping` endpoint is intentionally tiny (no auth, no filesystem I/O, no loggi
 
 ## Testing & Quality Assurance
 
-```bash
-# Run the full test suite
+```powershell
+# Windows (PowerShell)
 $env:PYTHONPATH="."; .venv\Scripts\pytest
+```
+
+```bash
+# macOS / Linux
+export PYTHONPATH=. && .venv/bin/pytest
 ```
 
 ```
