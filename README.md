@@ -74,7 +74,7 @@ You ask in plain English. RepoLens searches your codebase and answers with proof
 
 ---
 
-## For Technical Readers — How It Actually Works
+
 
 ### 4-Stage Verification Pipeline
 
