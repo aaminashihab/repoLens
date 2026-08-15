@@ -125,7 +125,7 @@ POST /index-repository { repo_url }
 
 RepoLens includes a built-in benchmark (`RepoVerify-Bench`) evaluated on **20 real-world claims** drawn from published CVEs and GitHub PRs across Flask, FastAPI, Django, and Requests. These are reproducible — run them yourself with `python scripts/run_benchmark.py`.
 
-> Note: These numbers come from a small, curated evaluation suite — not a large-scale independent study. They reflect performance on those 20 specific claims.
+> Note: These numbers come from a curated 20-claim evaluation suite — not a large-scale independent study. They reflect performance on those 20 specific claims.
 
 | Metric | Score | Notes |
 |---|---|---|
@@ -140,12 +140,12 @@ RepoLens includes a built-in benchmark (`RepoVerify-Bench`) evaluated on **20 re
 
 On the same 20-claim suite, adding AST call-graph expansion to vector search improved results:
 
-| Approach | Evidence Recall | Precision |
-|---|---|---|
-| Vector Search Only | 61.8% | 81.0% |
-| **Hybrid (Vector + AST Call Graph)** | **78.5%** | **84.2%** |
+| Approach | Evidence Recall |
+|---|---|
+| Vector Search Only | 72.5% |
+| **Hybrid (Vector + AST Call Graph)** | **77.5%** |
 
-The call-graph expansion traces caller/callee relationships, surfacing evidence that plain similarity search misses.
+The call-graph expansion traces caller/callee relationships, surfacing evidence that plain similarity search misses (e.g. `memory_scan_service.py` and `verification_service.py` were each only reachable via 2-hop traversal from their callers). Relative recall improvement: **+6.9%**.
 
 ---
 
