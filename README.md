@@ -20,7 +20,7 @@ Instead of giving you an AI opinion, RepoLens finds the **most relevant lines of
 [![Tests](https://img.shields.io/badge/Tests-99_Passing-22c55e?style=for-the-badge)](#testing--quality-assurance)
 [![Python](https://img.shields.io/badge/Python-3.10-3b82f6?style=for-the-badge&logo=python&logoColor=white)](#tech-stack)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](#tech-stack)
-[![CI](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/aaminashihab/repoLens/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml)
 
 <br/>
 <br/>
