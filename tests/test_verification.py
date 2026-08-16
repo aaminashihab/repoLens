@@ -287,3 +287,81 @@ def test_guardrail_malformed_line_range_stripping():
     assert len(validated.supporting_evidence) == 1
     assert validated.supporting_evidence[0].line_range == "L10-L20"
 
+
+def test_compute_evidence_completeness_high_quality():
+    """Verify that high-similarity chunks with full coverage produce high completeness score."""
+    from app.core.guardrails import compute_evidence_completeness
+    from app.models.verification import AtomicHypothesis
+    from app.services.retrieval_service import RetrievedChunk
+
+    chunks = [
+        RetrievedChunk(
+            text="code...",
+            file_path="app/auth.py",
+            symbol_name="login",
+            chunk_type="function",
+            similarity_score=0.88,
+            start_line=1,
+            end_line=20,
+        ),
+        RetrievedChunk(
+            text="code...",
+            file_path="app/session.py",
+            symbol_name="validate",
+            chunk_type="function",
+            similarity_score=0.82,
+            start_line=1,
+            end_line=20,
+        ),
+    ]
+
+    report = VerificationReport(
+        claim="Auth is safe",
+        verification_status=VerificationStatus.LIKELY_TRUE,
+        confidence_score=90.0,
+        atomic_hypotheses=[
+            AtomicHypothesis(hypothesis_id="H1", statement="Checks token", status="VERIFIED"),
+        ],
+        supporting_evidence=[
+            EvidenceItem(
+                file_path="app/auth.py",
+                line_range="L1-L10",
+                symbol_name="login",
+                snippet="code...",
+                relevance="Auth check",
+            )
+        ],
+    )
+
+    score = compute_evidence_completeness(chunks, report, target_k=2)
+    assert score >= 0.75
+
+
+def test_compute_evidence_completeness_low_relevance_triggers_refusal():
+    """Verify that low-similarity chunks produce a low completeness score (< 0.70)."""
+    from app.core.guardrails import compute_evidence_completeness
+    from app.services.retrieval_service import RetrievedChunk
+
+    # Chunks barely above the 0.15 threshold
+    low_sim_chunks = [
+        RetrievedChunk(
+            text="unrelated code...",
+            file_path="app/utils.py",
+            symbol_name="helper",
+            chunk_type="function",
+            similarity_score=0.17,
+            start_line=1,
+            end_line=20,
+        )
+    ]
+
+    report = VerificationReport(
+        claim="Critical auth security claim",
+        verification_status=VerificationStatus.LIKELY_TRUE,
+        confidence_score=85.0,
+        supporting_evidence=[],
+    )
+
+    score = compute_evidence_completeness(low_sim_chunks, report, target_k=5)
+    assert score < 0.70
+

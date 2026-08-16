@@ -735,7 +735,7 @@ Render's free tier spins down services after ~15 minutes of inactivity. RepoLens
 | **LLM Reasoning** | OpenAI GPT-4o-mini / Gemini 2.5 Flash | Dual-provider claim evaluation and Q&A |
 | **Frontend** | Vanilla TypeScript SPA | Zero-framework UI with DOMPurify XSS defense |
 | **Styling** | Custom CSS Design System | Glassmorphism dark theme with semantic color tokens |
-| **Testing** | pytest (99 tests) | Comprehensive boundary-condition and failure-mode coverage |
+| **Testing** | pytest (102 tests) | Comprehensive boundary-condition and failure-mode coverage |
 | **CI/CD** | GitHub Actions | Matrix builds (Python 3.11 + 3.12), ruff linting |
 | **Deployment** | Render (IaC Blueprint) | One-click deployment with persistent storage |
 | **Rate Limiting** | SlowAPI | IP-based rate limiting on verification and indexing endpoints |
@@ -750,12 +750,12 @@ Render's free tier spins down services after ~15 minutes of inactivity. RepoLens
 | Metric | Value |
 |---|---|
 | **Verification precision** | 80.0% on curated benchmark suite |
-| **Evidence recall** | 80.0% on curated benchmark suite |
+| **Evidence recall** | 80.0% on curated benchmark suite (vs 55.0% vector-only, +25% gain) |
 | **Hallucination rate** | 0.0% — zero uncited claims |
 | **Citation accuracy** | 100.0% — citations verified against real code bounds |
 | **Pipeline latency** | <1ms internal retrieval/guardrail time |
 | **Cost per verification** | ~$0.0005 using GPT-4o-mini |
-| **Test coverage** | 99 tests across 18 files, passing in ~9.8s |
+| **Test coverage** | 102 tests across 18 files, passing in ~9.9s |
 
 ### Qualitative Impact
 

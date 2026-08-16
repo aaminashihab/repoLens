@@ -206,4 +206,22 @@ class EvaluatorTests(unittest.TestCase):
         self.assertEqual(metrics_4o.estimated_tokens_per_claim, 2170)
         self.assertEqual(metrics_gemini.estimated_tokens_per_claim, 2170)
 
+    def test_ablation_study_demonstrates_graph_recall_gain(self) -> None:
+        """Verify that ablation study on benchmark suite demonstrates higher recall for hybrid."""
+        from scripts.run_benchmark import (
+            build_mock_verification_service,
+            get_default_benchmark_suite,
+        )
+
+        service = build_mock_verification_service()
+        evaluator = RepoVerifyEvaluator(service)
+        suite = get_default_benchmark_suite()
+        results = evaluator.run_ablation_study(suite)
+        hybrid_rec = results["hybrid_vector_graph"].recall
+        vector_rec = results["vector_only_baseline"].recall
+        self.assertGreater(hybrid_rec, vector_rec)
+        self.assertEqual(hybrid_rec, 0.80)
+        self.assertEqual(vector_rec, 0.55)
+
+
 

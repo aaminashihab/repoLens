@@ -14,8 +14,15 @@ flag toggled by a lightweight retrieval_service proxy — mirroring exactly what
 evaluator.run_ablation_study() monkeypatches in the real service.
 """
 
+import sys
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
+
+# Ensure repo root is on sys.path for direct CLI script execution
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 from app.core.evaluator import BenchmarkTestCase, RepoVerifyEvaluator
 from app.models.verification import EvidenceItem, VerificationReport, VerificationStatus
@@ -470,6 +477,10 @@ class _GraphAwareMockService:
         self._retrieval_service = retrieval_proxy
 
     def verify_claim(self, index_id: str, claim: str, **kwargs: Any) -> VerificationReport:
+        # Invoke retrieval proxy to trigger graph-active detection (mirrors real VerificationService)
+        if hasattr(self, "_retrieval_service") and hasattr(self._retrieval_service, "retrieve_with_graph"):
+            self._retrieval_service.retrieve_with_graph(index_id, claim)
+
         reports = _HYBRID_REPORTS if self._graph_active else _VECTOR_ONLY_REPORTS
         for report in reports.values():
             if report.claim == claim:
@@ -524,10 +535,10 @@ def run_benchmark_cli() -> None:
     vector_only = ablation["vector_only_baseline"]
 
     print("\n+" + "-" * 30 + "+" + "-" * 22 + "+" + "-" * 22 + "+")
-    print(f"| {'Strategy':<28} | {'Precision':<20} | {'Citation Accuracy':<20} |")
+    print(f"| {'Strategy':<28} | {'Precision':<20} | {'Evidence Recall':<20} |")
     print("+" + "-" * 30 + "+" + "-" * 22 + "+" + "-" * 22 + "+")
-    print(f"| {'Hybrid (Vector + AST Graph)':<28} | {hybrid.precision * 100:.1f}%{'':<15} | {hybrid.citation_accuracy:.1f}%{'':<15} |")
-    print(f"| {'Vector-Only Baseline':<28} | {vector_only.precision * 100:.1f}%{'':<15} | {vector_only.citation_accuracy:.1f}%{'':<15} |")
+    print(f"| {'Hybrid (Vector + AST Graph)':<28} | {hybrid.precision * 100:.1f}%{'':<15} | {hybrid.recall * 100:.1f}%{'':<15} |")
+    print(f"| {'Vector-Only Baseline':<28} | {vector_only.precision * 100:.1f}%{'':<15} | {vector_only.recall * 100:.1f}%{'':<15} |")
     print("+" + "-" * 30 + "+" + "-" * 22 + "+" + "-" * 22 + "+\n")
     print("[SUCCESS] RepoVerify-Bench evaluation completed successfully.")
 

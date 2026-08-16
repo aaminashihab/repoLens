@@ -110,6 +110,49 @@ def _is_citation_grounded_in_chunks(
     return True
 
 
+def compute_evidence_completeness(
+    evidence_chunks: list[Any],
+    report: VerificationReport | None = None,
+    target_k: int = 5,
+) -> float:
+    """Compute semantic evidence completeness score between 0.0 and 1.0.
+
+    Multi-factor evaluation:
+    1. Retrieval Relevance (45% weight): Mean normalized semantic similarity of
+       retrieved code chunks. Chunks near the 0.15 threshold produce low scores;
+       high-confidence chunks (>= 0.65) produce ~1.0.
+    2. Hypothesis / Citation Coverage (35% weight): Fraction of decomposed atomic
+       hypotheses that have direct grounded citations (or presence of validated citations).
+    3. Retrieval Depth (20% weight): Fraction of target evidence depth (len / target_k).
+    """
+    if not evidence_chunks:
+        return 0.0
+
+    # 1. Retrieval Relevance Score (0.0 - 1.0)
+    sim_scores = [getattr(c, "similarity_score", 0.5) for c in evidence_chunks]
+    # Normalize with 0.15 as baseline floor and >= 0.65 as full score
+    normalized_sims = [
+        min(1.0, max(0.0, (float(s) - 0.15) / (0.65 - 0.15))) for s in sim_scores
+    ]
+    avg_relevance = sum(normalized_sims) / len(normalized_sims) if normalized_sims else 0.5
+
+    # 2. Hypothesis Coverage Score (0.0 - 1.0)
+    if report and report.atomic_hypotheses:
+        total_hypotheses = len(report.atomic_hypotheses)
+        total_citations = len(report.supporting_evidence) + len(report.contradicting_evidence)
+        coverage_ratio = min(1.0, total_citations / max(1, total_hypotheses))
+    elif report and (report.supporting_evidence or report.contradicting_evidence):
+        coverage_ratio = 1.0
+    else:
+        coverage_ratio = 0.5 if not report else 0.0
+
+    # 3. Depth / Quantity Score (0.0 - 1.0)
+    quantity_ratio = min(1.0, len(evidence_chunks) / max(1, target_k))
+
+    completeness = (0.45 * avg_relevance) + (0.35 * coverage_ratio) + (0.20 * quantity_ratio)
+    return round(max(0.0, min(1.0, completeness)), 4)
+
+
 class GuardrailValidationError(Exception):
     """Raised when a verification report violates critical safety guardrails."""
 

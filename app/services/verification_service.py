@@ -6,7 +6,7 @@ import os
 from time import perf_counter
 from typing import Any
 
-from app.core.guardrails import GuardrailValidator
+from app.core.guardrails import GuardrailValidator, compute_evidence_completeness
 from app.models.verification import (
     AtomicHypothesis,
     EvidenceItem,
@@ -104,11 +104,15 @@ class VerificationService:
         raw_report = self._run_llm_judge(normalized_claim, evidence_chunks)
 
         # Stage 5: Guardrail validation & refusal enforcement
-        # Completeness = retrieved chunks as a fraction of TOP_K. Guards against
-        # mocked retrieval services in tests (fall back to 5 if attribute is absent or non-int).
-        top_k_raw = getattr(self._retrieval_service, '_TOP_K', 5)
+        # Multi-factor completeness combines semantic retrieval relevance,
+        # atomic hypothesis coverage, and context depth.
+        top_k_raw = getattr(self._retrieval_service, "_TOP_K", 5)
         top_k = top_k_raw if isinstance(top_k_raw, int) else 5
-        completeness_score = min(1.0, len(evidence_chunks) / max(1, top_k))
+        completeness_score = compute_evidence_completeness(
+            evidence_chunks=evidence_chunks,
+            report=raw_report,
+            target_k=top_k,
+        )
         final_report = GuardrailValidator.sanitize_and_validate(
             report=raw_report,
             available_files=available_files,

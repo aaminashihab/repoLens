@@ -17,7 +17,7 @@ Instead of giving you an AI opinion, RepoLens finds the **most relevant lines of
 ---
 
 [![Live Demo](https://img.shields.io/badge/Live_Demo-repolens--x7b8.onrender.com-6366f1?style=for-the-badge)](https://repolens-x7b8.onrender.com/)
-[![Tests](https://img.shields.io/badge/Tests-99_Passing-22c55e?style=for-the-badge)](#testing--quality-assurance)
+[![Tests](https://img.shields.io/badge/Tests-102_Passing-22c55e?style=for-the-badge)](#testing--quality-assurance)
 [![Python](https://img.shields.io/badge/Python-3.10-3b82f6?style=for-the-badge&logo=python&logoColor=white)](#tech-stack)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](#tech-stack)
 [![CI](https://img.shields.io/github/actions/workflow/status/aaminashihab/repoLens/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml)
@@ -358,13 +358,13 @@ export PYTHONPATH=. && .venv/bin/pytest
 ```
 
 ```
-======================== 99 passed, 1 warning in 9.85s ========================
+======================= 102 passed, 1 warning in 9.91s =======================
 ```
 
 **The test suite covers:**
 - Webhook HMAC signature verification & rate limiting
 - AST call graph construction & N-hop traversal
-- Guardrail refusal logic & evidence completeness validation
+- Guardrail refusal logic & semantic evidence completeness validation
 - API key constant-time comparison & route authentication
 - Benchmark precision, recall & citation accuracy
 
@@ -388,14 +388,14 @@ python scripts/run_benchmark.py
 | Hallucination Rate (Uncited Claims)     | 0.0%                              |
 | Citation Accuracy                       | 100.0%                            |
 | Average Latency per Claim               | 0.0 ms                            |
-| Est. Cost per Claim (USD)               | $0.0004695                        |
+| Est. Cost per Claim (USD)               | $0.000469                         |
 +-----------------------------------------+-----------------------------------+
 
 +------------------------------+----------------------+----------------------+
-| Strategy                     | Precision            | Citation Accuracy    |
+| Strategy                     | Precision            | Evidence Recall      |
 +------------------------------+----------------------+----------------------+
-| Hybrid (Vector + AST Graph)  | 80.0%                | 100.0%               |
-| Vector-Only Baseline         | 80.0%                | 100.0%               |
+| Hybrid (Vector + AST Graph)  | 80.0%                | 80.0%                |
+| Vector-Only Baseline         | 80.0%                | 55.0%                |
 +------------------------------+----------------------+----------------------+
 ```
 
