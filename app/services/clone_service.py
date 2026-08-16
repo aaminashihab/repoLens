@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import tempfile
+import threading
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
@@ -88,18 +89,49 @@ class CloneService:
         try:
             working_directory = Path(tempfile.mkdtemp(prefix="repolens-"))
             repository_path = working_directory / "repository"
+
             # depth=1 + single_branch=True: shallow clone fetches only the
             # latest commit on the default branch, cutting clone time and disk
             # usage by 60-90% compared to a full history clone — critical for
             # fast indexing on Render's free tier.
-            # env CLONE_TIMEOUT_SECONDS caps how long we block this thread.
-            Repo.clone_from(
-                auth_url,
-                repository_path,
-                depth=1,
-                single_branch=True,
-                env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
-            )
+            #
+            # CLONE_TIMEOUT_SECONDS: enforced via a daemon thread join so that
+            # slow or hung clones (large repo, flaky network) are hard-killed
+            # after the configured wall-clock limit instead of hanging forever.
+            clone_exc: list[BaseException] = []
+
+            def _do_clone() -> None:
+                try:
+                    Repo.clone_from(
+                        auth_url,
+                        repository_path,
+                        depth=1,
+                        single_branch=True,
+                        env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+                    )
+                except BaseException as _exc:  # noqa: BLE001
+                    clone_exc.append(_exc)
+
+            clone_thread = threading.Thread(target=_do_clone, daemon=True)
+            clone_thread.start()
+            clone_thread.join(timeout=_CLONE_TIMEOUT)
+
+            if clone_thread.is_alive():
+                # Thread is still running — clone exceeded the configured timeout.
+                # The daemon thread will be abandoned (OS cleans up on process exit).
+                raise RepositoryCloneError(
+                    f"Clone timed out after {_CLONE_TIMEOUT} s. The repository may be "
+                    "too large or the network connection is too slow."
+                )
+
+            # Re-raise any exception the clone thread encountered.
+            if clone_exc:
+                raise clone_exc[0]
+
+        except RepositoryCloneError:
+            if working_directory is not None:
+                shutil.rmtree(working_directory, ignore_errors=True)
+            raise
         except (GitError, OSError) as exc:
             if working_directory is not None:
                 shutil.rmtree(working_directory, ignore_errors=True)

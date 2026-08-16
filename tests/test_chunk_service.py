@@ -130,26 +130,23 @@ class ChunkServiceTests(unittest.TestCase):
             "If this fails, the import/call pattern may have changed.",
         )
 
-    def test_jsts_call_pattern_known_limitation_single_pass(self) -> None:
-        """Documents that JS/TS graph edges are silently dropped for not-yet-indexed symbols.
+    def test_jsts_cross_file_edges_resolved_after_two_pass(self) -> None:
+        """Verifies that JS/TS cross-file graph edges are created after the two-pass fix.
 
-        Because the JS/TS edge builder runs in a single file-walk pass, it can
-        only create edges to symbols already in the graph. Symbols in files
-        processed *after* the caller produce no edge — even if ghostHelper()
-        appears in source code (not just comments).
-
-        This is a known limitation: the Python path resolves this by building
-        the full symbol graph first, then resolving edges in a second pass.
-        The fix for JS/TS would be a two-pass approach or buffering unresolved
-        edge targets.
+        Previously the JS/TS edge builder ran in a single pass, so caller files
+        could only reference symbols from files processed earlier alphabetically.
+        After the two-pass fix (Pass 1: all nodes, Pass 2: all edges), cross-file
+        edges are resolved correctly regardless of filename ordering.
         """
         with tempfile.TemporaryDirectory() as temporary_directory:
             repository = Path(temporary_directory)
-            # caller.ts sorts before real.ts — so real.ts is processed AFTER caller.ts.
-            # ghostHelper is therefore not in the graph when caller.ts is scanned.
+            # caller.ts sorts before real.ts alphabetically, so in the old
+            # single-pass approach ghostHelper would not yet be in the graph
+            # when caller.ts edges were extracted.  With two-pass construction
+            # both symbols are registered in Pass 1 before any edges are resolved.
             (repository / "caller.ts").write_text(
                 "export function doWork(): void {\n"
-                "    ghostHelper();\n"  # real call, not a comment
+                "    ghostHelper();\n"
                 "}\n",
                 encoding="utf-8",
             )
@@ -161,12 +158,59 @@ class ChunkServiceTests(unittest.TestCase):
 
         ghost_nodes = {node.node_id for node in graph.nodes.values() if "ghostHelper" in node.node_id}
         edge_targets = {edge.target_id for edge in graph.edges}
-        # Known limitation: no edge is created because ghostHelper isn't in the graph
-        # yet when caller.ts is processed (single-pass walk, alphabetical order).
-        self.assertFalse(
+        self.assertTrue(
+            ghost_nodes,
+            "ghostHelper symbol was not registered as a graph node.",
+        )
+        self.assertTrue(
             edge_targets & ghost_nodes,
-            "Behaviour changed: cross-file edge created for a symbol indexed after its caller. "
-            "The single-pass limitation may have been resolved — update this test.",
+            "Expected a cross-file call edge from doWork -> ghostHelper after two-pass fix.",
+        )
+
+
+    def test_python_cross_file_call_edges_resolved_two_pass(self) -> None:
+        """Integration test: Python AST cross-file call edges are built via two-pass graph.
+
+        This is the test that would have caught the original ordering bug:
+        _extract_graph_edges() was called before graph nodes were registered,
+        so target nodes didn't exist yet and edges silently dropped.
+
+        With the two-pass fix:
+          Pass 1 — all chunks extracted + all nodes added for every file.
+          Pass 2 — edges resolved (all target nodes are now in the graph).
+
+        Repo layout:
+          auth.py   — def login(): calls verify_token()
+          tokens.py — def verify_token(): pass
+        """
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            repository = Path(temporary_directory)
+            (repository / "auth.py").write_text(
+                "def login():\n"
+                "    verify_token()\n",
+                encoding="utf-8",
+            )
+            (repository / "tokens.py").write_text(
+                "def verify_token():\n"
+                "    pass\n",
+                encoding="utf-8",
+            )
+            chunks, graph = ChunkService().index_repository(repository)
+
+        # Both symbols must be registered as nodes
+        node_symbols = {node.symbol_name for node in graph.nodes.values()}
+        self.assertIn("login", node_symbols, "login function not found in graph nodes")
+        self.assertIn("verify_token", node_symbols, "verify_token function not found in graph nodes")
+
+        # There must be a 'calls' edge from auth.py::login -> tokens.py::verify_token
+        edge_pairs = {(edge.source_id, edge.target_id) for edge in graph.edges}
+        login_id = "auth.py::login"
+        token_id = "tokens.py::verify_token"
+        self.assertIn(
+            (login_id, token_id),
+            edge_pairs,
+            f"Expected cross-file call edge {login_id!r} -> {token_id!r}. "
+            "If missing, the two-pass graph construction is broken.",
         )
 
 

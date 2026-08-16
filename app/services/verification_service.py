@@ -1,4 +1,4 @@
-"""Multi-Agent Orchestrator Service for Evidence-Based Repository Verification."""
+"""Hypothesis-Driven LLM-as-Judge Verification Service for Evidence-Based Repository Verification."""
 
 import json
 import logging
@@ -29,7 +29,7 @@ class VerificationServiceError(RuntimeError):
 
 
 class VerificationService:
-    """Orchestrates Claim Extraction, Hybrid Evidence Retrieval, LLM-as-Judge, and Guardrails."""
+    """Structured LLM-as-Judge verification pipeline: hybrid retrieval → hypothesis decomposition → evidence evaluation → guardrail validation."""
 
     _SYSTEM_PROMPT = (
         "You are an Evidence-Based Repository Verification Judge. "
@@ -67,7 +67,7 @@ class VerificationService:
         pr_number: int | None = None,
         issue_number: int | None = None,
     ) -> VerificationReport:
-        """Execute multi-stage verification pipeline for claim against indexed repository."""
+        """Execute hypothesis-driven verification pipeline for claim against indexed repository."""
         started_at = perf_counter()
         normalized_claim = claim.strip()
         if not normalized_claim:

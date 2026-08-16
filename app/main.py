@@ -118,11 +118,27 @@ _MAX_REQUEST_BODY_BYTES = int(os.getenv("MAX_REQUEST_BODY_BYTES", str(10 * 1024 
 
 
 class _RequestSizeLimitMiddleware(BaseHTTPMiddleware):
-    """Reject requests whose Content-Length header exceeds the configured limit."""
+    """Reject requests whose body exceeds the configured limit.
+
+    Two-stage check:
+    1. Fast-path: if the client advertises Content-Length and it exceeds the
+       cap, reject immediately before reading any body bytes.
+    2. Hard cap: buffer the actual body and enforce the byte limit. This
+       catches chunked-transfer requests that omit Content-Length entirely,
+       which the header-only check would silently allow through.
+    """
 
     async def dispatch(self, request: Request, call_next):
+        # Stage 1 — fast-path rejection on advertised Content-Length
         content_length = request.headers.get("content-length")
         if content_length and int(content_length) > _MAX_REQUEST_BODY_BYTES:
+            return JSONResponse(
+                status_code=413,
+                content={"detail": "Request body too large."},
+            )
+        # Stage 2 — hard cap on actual bytes received (handles chunked requests)
+        body = await request.body()
+        if len(body) > _MAX_REQUEST_BODY_BYTES:
             return JSONResponse(
                 status_code=413,
                 content={"detail": "Request body too large."},

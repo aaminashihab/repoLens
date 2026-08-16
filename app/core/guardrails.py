@@ -1,6 +1,7 @@
 """Guardrails and refusal validation logic for evidence-driven repository verification."""
 
 import logging
+import re
 
 from app.models.verification import (
     EvidenceItem,
@@ -9,6 +10,31 @@ from app.models.verification import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Matches "L<int>-L<int>" or "L<int>" — the line-range format produced by the LLM judge.
+_LINE_RANGE_RE = re.compile(r"^L(\d+)(?:-L(\d+))?$", re.IGNORECASE)
+
+
+def _is_valid_line_range(line_range: str) -> bool:
+    """Return True if *line_range* is a well-formed, logically consistent citation.
+
+    Validates:
+    - Parses as ``L<start>`` or ``L<start>-L<end>``
+    - Both values are positive integers
+    - start <= end (when a range is present)
+
+    An LLM could hallucinate ``L999-L1020`` for a 50-line file; this check
+    catches the most egregious format/logic errors before they reach the caller.
+    We intentionally do NOT check actual file line counts here (that would
+    require the chunk store), but format + ordering validation is already a
+    meaningful improvement over no validation.
+    """
+    m = _LINE_RANGE_RE.match(line_range.strip())
+    if not m:
+        return False
+    start = int(m.group(1))
+    end = int(m.group(2)) if m.group(2) is not None else start
+    return start >= 1 and end >= start
 
 
 class GuardrailValidationError(Exception):
@@ -31,23 +57,37 @@ class GuardrailValidator:
         Rules:
         1. If evidence completeness score < MIN_COMPLETENESS_THRESHOLD (70%), downgrade status to UNCERTAIN.
         2. Ensure all citations reference valid repository file paths.
-        3. If status is LIKELY_TRUE but zero supporting evidence items are cited, refuse and mark UNCERTAIN.
+        3. Strip citations with malformed or logically impossible line ranges.
+        4. If status is LIKELY_TRUE but zero supporting evidence items are cited, refuse and mark UNCERTAIN.
         """
         validated_supporting: list[EvidenceItem] = []
         validated_contradicting: list[EvidenceItem] = []
 
         for item in report.supporting_evidence:
-            if item.file_path in available_files or not available_files:
-                validated_supporting.append(item)
-            else:
+            if item.file_path not in available_files and available_files:
                 logger.warning(
                     "Guardrail stripped uncited/invalid file path",
                     extra={"file_path": item.file_path},
                 )
+                continue
+            if not _is_valid_line_range(item.line_range):
+                logger.warning(
+                    "Guardrail stripped citation with malformed line range",
+                    extra={"file_path": item.file_path, "line_range": item.line_range},
+                )
+                continue
+            validated_supporting.append(item)
 
         for item in report.contradicting_evidence:
-            if item.file_path in available_files or not available_files:
-                validated_contradicting.append(item)
+            if item.file_path not in available_files and available_files:
+                continue
+            if not _is_valid_line_range(item.line_range):
+                logger.warning(
+                    "Guardrail stripped contradicting citation with malformed line range",
+                    extra={"file_path": item.file_path, "line_range": item.line_range},
+                )
+                continue
+            validated_contradicting.append(item)
 
         # Rule 1: Refusal on low evidence completeness
         new_status = report.verification_status
@@ -87,3 +127,4 @@ class GuardrailValidator:
             missing_information=missing_info,
             recommended_tests=report.recommended_tests,
         )
+

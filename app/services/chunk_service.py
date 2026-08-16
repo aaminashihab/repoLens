@@ -79,7 +79,9 @@ class ChunkService:
 
         indexed_chunks: list[CodeChunk] = []
         graph = RepositoryGraph()
+        file_tree_map: dict[Path, tuple[Node, bytes]] = {}
 
+        # Pass 1: Extract chunks and add graph nodes
         for file_path in source_files:
             try:
                 file_stat = file_path.stat()
@@ -93,7 +95,6 @@ class ChunkService:
             except OSError as exc:
                 raise RepositoryChunkError(f"Unable to read file: {file_path}") from exc
 
-            # Security: skip binary files (null bytes indicate non-text content)
             if b"\x00" in source[:1024]:
                 logger.debug("Skipping binary file", extra={"file": str(file_path)})
                 continue
@@ -103,12 +104,12 @@ class ChunkService:
 
             relative_path = file_path.relative_to(repository_path).as_posix()
             
+            file_chunks: list[CodeChunk] = []
             if file_path.suffix == ".py":
                 parser = Parser(self._language)
                 tree = parser.parse(source)
+                file_tree_map[file_path] = (tree.root_node, source)
                 file_chunks = self._extract_chunks(tree.root_node, source, relative_path)
-                # Extract cross-symbol function call edges for Python ASTs
-                self._extract_graph_edges(tree.root_node, source, relative_path, graph)
             elif file_path.suffix in {".js", ".jsx", ".ts", ".tsx"}:
                 file_chunks = self._extract_jsts_chunks(source, relative_path)
             else:
@@ -116,7 +117,6 @@ class ChunkService:
 
             indexed_chunks.extend(file_chunks)
 
-            # Build graph nodes FIRST so that edge extraction can look them up
             for chunk in file_chunks:
                 node_id = f"{chunk.file_path}::{chunk.symbol_name}"
                 graph.add_node(
@@ -131,13 +131,22 @@ class ChunkService:
                     )
                 )
 
-            # Extract edges AFTER nodes are registered so source node IDs resolve
-            if file_path.suffix in {".js", ".jsx", ".ts", ".tsx"}:
+        # Pass 2: Resolve edges
+        for file_path in source_files:
+            relative_path = file_path.relative_to(repository_path).as_posix()
+            try:
+                source = file_path.read_bytes()
+            except OSError:
+                continue
+
+            if file_path.suffix == ".py" and file_path in file_tree_map:
+                root_node, src = file_tree_map[file_path]
+                self._extract_graph_edges(root_node, src, relative_path, graph)
+            elif file_path.suffix in {".js", ".jsx", ".ts", ".tsx"}:
                 self._extract_jsts_graph_edges(source, relative_path, graph)
 
         processing_time_seconds = perf_counter() - started_at
 
-        # Respect per-index chunk cap to avoid exhausting free-tier API quota.
         if len(indexed_chunks) > self._MAX_CHUNKS_PER_INDEX:
             logger.warning(
                 "Repository produced more chunks than MAX_CHUNKS_PER_INDEX; truncating.",

@@ -13,7 +13,7 @@
 5. [Technical Deep Dive](#technical-deep-dive)
    - [Stage 1: Repository Ingestion & Indexing Pipeline](#stage-1-repository-ingestion--indexing-pipeline)
    - [Stage 2: Hybrid Retrieval Engine](#stage-2-hybrid-retrieval-engine)
-   - [Stage 3: Multi-Agent LLM-as-Judge](#stage-3-multi-agent-llm-as-judge)
+   - [Stage 3: Hypothesis-Driven LLM-as-Judge](#stage-3-hypothesis-driven-llm-as-judge)
    - [Stage 4: Anti-Hallucination Guardrails](#stage-4-anti-hallucination-guardrails)
 6. [Security Architecture](#security-architecture)
 7. [Frontend Engineering](#frontend-engineering)
@@ -84,7 +84,7 @@ User submits a verifiable claim
         │
         ├─ [1] Input validation & chatbot rejection
         ├─ [2] Hybrid retrieval (vector search + AST call-graph)
-        ├─ [3] Multi-agent LLM-as-Judge evaluation
+        ├─ [3] Hypothesis-driven LLM-as-Judge evaluation
         └─ [4] Anti-hallucination guardrails
         │
         ▼
@@ -378,9 +378,9 @@ The `RepositoryGraph.traverse_n_hops_with_depth()` method uses a `collections.de
 
 ---
 
-### Stage 3: Multi-Agent LLM-as-Judge
+### Stage 3: Hypothesis-Driven LLM-as-Judge
 
-The verification service orchestrates a **multi-stage LLM evaluation** that breaks the user's claim into independently testable sub-questions.
+The verification service orchestrates a **structured LLM evaluation** that breaks the user's claim into independently testable sub-questions.
 
 #### 3.1 — Claim Deconstruction
 

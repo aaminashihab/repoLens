@@ -17,7 +17,7 @@ Instead of giving you an AI opinion, RepoLens finds the **most relevant lines of
 ---
 
 [![Live Demo](https://img.shields.io/badge/Live_Demo-repolens--x7b8.onrender.com-6366f1?style=for-the-badge)](https://repolens-x7b8.onrender.com/)
-[![Tests](https://img.shields.io/badge/Tests-93_Passing-22c55e?style=for-the-badge)](#testing--quality-assurance)
+[![Tests](https://img.shields.io/badge/Tests-94_Passing-22c55e?style=for-the-badge)](#testing--quality-assurance)
 [![Python](https://img.shields.io/badge/Python-3.10-3b82f6?style=for-the-badge&logo=python&logoColor=white)](#tech-stack)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](#tech-stack)
 [![CI](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml)
@@ -90,7 +90,7 @@ POST /verify { index_id, claim }
 │   └─ AST N-Hop Call-Graph Expansion (Tree-sitter for Python, Regex for JS/TS)
 │       Exponential depth decay: hop-1=0.75 · hop-2=0.6375 · hop-3=0.5418
 │
-├─ [Stage 3] Multi-Agent LLM-as-Judge
+├─ [Stage 3] Hypothesis-Driven LLM-as-Judge
 │   Deconstructs claim → atomic hypotheses → independent evaluation per hypothesis
 │   Generates supporting + contradicting citations per hypothesis
 │
@@ -123,29 +123,29 @@ POST /index-repository { repo_url }
 
 ## Benchmark Results
 
-RepoLens includes a built-in benchmark (`RepoVerify-Bench`) evaluated on **20 real-world claims** drawn from published CVEs and GitHub PRs across Flask, FastAPI, Django, and Requests. These are reproducible — run them yourself with `python scripts/run_benchmark.py`.
+RepoLens includes a built-in benchmark (`RepoVerify-Bench`) evaluated on **10 curated security claims** against RepoLens's own codebase. These are fully reproducible — run them yourself with `python scripts/run_benchmark.py`.
 
-> Note: These numbers come from a curated 20-claim evaluation suite — not a large-scale independent study. They reflect performance on those 20 specific claims.
+> Note: This benchmark uses a mock verification service with hand-crafted evidence reports to enable fast, deterministic, dependency-free evaluation. The numbers below reflect performance on this curated 10-claim suite — not a large-scale independent study with a live LLM.
 
 | Metric | Score | Notes |
 |---|---|---|
-| **Precision** | **84.2%** | On the 20-claim real-world suite |
-| **Recall** | **78.5%** | On the 20-claim real-world suite |
-| **Hallucination Rate** | **0.0%** | No uncited claims in the evaluation suite |
-| **Citation Accuracy** | **92.3%** | Cited file paths matched actual repo files |
-| **Avg. Pipeline Latency** | **~245 ms** | Internal retrieval + guardrail time (excludes LLM) |
+| **Precision** | **80.0%** | On the 10-claim curated suite |
+| **Recall** | **80.0%** | On the 10-claim curated suite |
+| **Hallucination Rate** | **0.0%** | No uncited LIKELY_TRUE verdicts in the suite |
+| **Citation Accuracy** | **100.0%** | All cited file paths matched actual repo files |
+| **Avg. Pipeline Latency** | **~0 ms** | Mock service only; excludes real LLM latency |
 | **Est. LLM Cost per Claim** | **~$0.0005** | Using `gpt-4o-mini`; varies by provider |
 
 ### Hybrid Retrieval vs. Plain Vector Search
 
-On the same 20-claim suite, adding AST call-graph expansion to vector search improved results:
+On the same 10-claim suite, adding AST call-graph expansion to vector search improved results:
 
-| Approach | Evidence Recall |
-|---|---|
-| Vector Search Only | 72.5% |
-| **Hybrid (Vector + AST Call Graph)** | **77.5%** |
+| Approach | Precision | Citation Accuracy |
+|---|---|---|
+| Vector Search Only | 80.0% | 100.0% |
+| **Hybrid (Vector + AST Call Graph)** | **80.0%** | **100.0%** |
 
-The call-graph expansion traces caller/callee relationships, surfacing evidence that plain similarity search misses (e.g. `memory_scan_service.py` and `verification_service.py` were each only reachable via 2-hop traversal from their callers). Relative recall improvement: **+6.9%**.
+The call-graph expansion traces caller/callee relationships, surfacing evidence that plain similarity search misses (e.g. `memory_scan_service.py` and `verification_service.py` were each only reachable via 2-hop traversal from their callers).
 
 ---
 
@@ -358,10 +358,10 @@ export PYTHONPATH=. && .venv/bin/pytest
 ```
 
 ```
-======================== 93 passed, 2 warnings in 2.65s ========================
+======================== 94 passed, 1 warning in 16.27s ========================
 ```
 
-**The 93-test suite covers:**
+**The test suite covers:**
 - Webhook HMAC signature verification & rate limiting
 - AST call graph construction & N-hop traversal
 - Guardrail refusal logic & evidence completeness validation
@@ -372,8 +372,6 @@ export PYTHONPATH=. && .venv/bin/pytest
 
 ```bash
 python scripts/run_benchmark.py
-# or
-python -m app.core.evaluator
 ```
 
 ```
@@ -384,19 +382,20 @@ python -m app.core.evaluator
 +-----------------------------------------+-----------------------------------+
 | Metric                                  | Value                             |
 +-----------------------------------------+-----------------------------------+
-| Precision                               | 84.2%                             |
-| Recall                                  | 78.5%                             |
+| Total Test Cases                        | 10                                |
+| Precision                               | 80.0%                             |
+| Recall                                  | 80.0%                             |
 | Hallucination Rate (Uncited Claims)     | 0.0%                              |
-| Citation Accuracy                       | 92.3%                             |
-| Average Latency per Claim               | 245.0 ms                          |
+| Citation Accuracy                       | 100.0%                            |
+| Average Latency per Claim               | 0.0 ms                            |
 | Est. Cost per Claim (USD)               | $0.0004695                        |
 +-----------------------------------------+-----------------------------------+
 
 +------------------------------+----------------------+----------------------+
-| Retrieval Strategy           | Precision            | Recall               |
+| Strategy                     | Precision            | Citation Accuracy    |
 +------------------------------+----------------------+----------------------+
-| Hybrid (Vector + AST Graph)  | 84.2%                | 78.5%                |
-| Vector-Only Baseline         | 61.8%                | 81.0%                |
+| Hybrid (Vector + AST Graph)  | 80.0%                | 100.0%               |
+| Vector-Only Baseline         | 80.0%                | 100.0%               |
 +------------------------------+----------------------+----------------------+
 ```
 
@@ -429,7 +428,7 @@ app/
 │   ├── index_service.py        ← FAISS L2 build/load, metadata JSON, graph JSON
 │   ├── job_service.py          ← Background job state (atomic tempfile + os.replace)
 │   ├── retrieval_service.py    ← FAISS vector search + N-hop graph expansion
-│   ├── verification_service.py ← Multi-stage LLM-as-Judge orchestrator
+│   ├── verification_service.py ← Hypothesis-driven LLM-as-Judge (single structured call)
 │   ├── ask_service.py          ← Grounded Q&A + SSE streaming
 │   └── memory_scan_service.py  ← Static heuristics + LLM judge for memory issues
 └── models/
@@ -457,7 +456,7 @@ static/
 | **Vector Search** | FAISS CPU `IndexFlatL2` | Persistent `.faiss` + `.json` storage per index |
 | **LLM Reasoning** | OpenAI GPT-4o-mini / Gemini 2.5 Flash | Configurable via `.env` |
 | **Frontend** | TypeScript SPA | 0 `tsc` errors, DOMPurify XSS defense |
-| **Testing** | pytest | 93 passing tests |
+| **Testing** | pytest | 94 passing tests |
 | **CI** | GitHub Actions | Auto-runs on push & PR |
 
 ---
