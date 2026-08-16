@@ -222,7 +222,11 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 if not os.getenv("API_KEY"):
-    logger.warning("API_KEY is not set. API key authentication is disabled.")
+    app_env = os.getenv("ENVIRONMENT", os.getenv("APP_ENV", "development")).lower()
+    if app_env in ("production", "prod") or os.getenv("REQUIRE_API_KEY", "false").lower() in ("true", "1", "yes"):
+        logger.error("CRITICAL: API_KEY is not set in production environment!")
+    else:
+        logger.warning("API_KEY is not set. API key authentication is disabled in development mode.")
 
 if not os.getenv("GITHUB_WEBHOOK_SECRET"):
     logger.warning("GITHUB_WEBHOOK_SECRET is not set. Webhook signature verification is disabled.")

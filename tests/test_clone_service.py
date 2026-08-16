@@ -74,6 +74,19 @@ class CloneServiceTests(unittest.TestCase):
             self.assertFalse(Path(temp_dir).exists())
 
     @patch("app.services.clone_service.Repo.clone_from")
+    def test_clone_repository_timeout_cleans_up(self, mock_clone) -> None:
+        mock_clone.side_effect = GitError("Process timed out after 120s and was killed")
+        with patch("app.services.clone_service.tempfile.mkdtemp") as mock_mkdtemp:
+            temp_dir = tempfile.mkdtemp(prefix="test-repolens-")
+            mock_mkdtemp.return_value = temp_dir
+            
+            with self.assertRaises(RepositoryCloneError) as ctx:
+                self.service.clone_repository("https://github.com/owner/repo")
+            
+            self.assertIn("timed out", str(ctx.exception).lower())
+            self.assertFalse(Path(temp_dir).exists())
+
+    @patch("app.services.clone_service.Repo.clone_from")
     def test_clone_repository_context_cleanup_on_success(self, mock_clone) -> None:
         with patch("app.services.clone_service.tempfile.mkdtemp") as mock_mkdtemp:
             temp_dir = tempfile.mkdtemp(prefix="test-repolens-")

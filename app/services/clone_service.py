@@ -25,7 +25,7 @@ from urllib.parse import urlparse
 # attempt and must be rejected before it reaches the HTTP clone URL.
 _MAX_TOKEN_BYTES = 512
 
-from git import GitError, Repo
+from git import GitCommandError, GitError, Repo
 
 logger = logging.getLogger(__name__)
 
@@ -95,44 +95,40 @@ class CloneService:
             # usage by 60-90% compared to a full history clone — critical for
             # fast indexing on Render's free tier.
             #
-            # CLONE_TIMEOUT_SECONDS: enforced via a daemon thread join so that
-            # slow or hung clones (large repo, flaky network) are hard-killed
-            # after the configured wall-clock limit instead of hanging forever.
-            clone_exc: list[BaseException] = []
-
-            def _do_clone() -> None:
-                try:
-                    Repo.clone_from(
-                        auth_url,
-                        repository_path,
-                        depth=1,
-                        single_branch=True,
-                        env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
-                    )
-                except BaseException as _exc:  # noqa: BLE001
-                    clone_exc.append(_exc)
-
-            clone_thread = threading.Thread(target=_do_clone, daemon=True)
-            clone_thread.start()
-            clone_thread.join(timeout=_CLONE_TIMEOUT)
-
-            if clone_thread.is_alive():
-                # Thread is still running — clone exceeded the configured timeout.
-                # The daemon thread will be abandoned (OS cleans up on process exit).
+            # kill_after_timeout: passes the timeout down to GitPython's process
+            # execution layer. If git exceeds CLONE_TIMEOUT_SECONDS, GitPython
+            # immediately sends SIGKILL / proc.kill() to the child OS process
+            # and raises AutoInterrupt, guaranteeing no orphaned background
+            # clone processes or file locks during cleanup.
+            Repo.clone_from(
+                auth_url,
+                repository_path,
+                depth=1,
+                single_branch=True,
+                env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+                kill_after_timeout=float(_CLONE_TIMEOUT),
+            )
+        except TimeoutError:
+            if working_directory is not None:
+                shutil.rmtree(working_directory, ignore_errors=True)
+            logger.error(
+                "Git clone process timed out after %s seconds and was killed",
+                _CLONE_TIMEOUT,
+                extra={"repo_url": normalized_url},
+            )
+            raise RepositoryCloneError(
+                f"Clone timed out after {_CLONE_TIMEOUT} s. The repository may be "
+                "too large or the network connection is too slow."
+            ) from None
+        except (GitError, OSError) as exc:
+            if working_directory is not None:
+                shutil.rmtree(working_directory, ignore_errors=True)
+            exc_msg = str(exc).lower()
+            if "timed out" in exc_msg or "timeout" in exc_msg or "killed" in exc_msg:
                 raise RepositoryCloneError(
                     f"Clone timed out after {_CLONE_TIMEOUT} s. The repository may be "
                     "too large or the network connection is too slow."
-                )
-
-            # Re-raise any exception the clone thread encountered.
-            if clone_exc:
-                raise clone_exc[0]
-
-        except RepositoryCloneError:
-            if working_directory is not None:
-                shutil.rmtree(working_directory, ignore_errors=True)
-            raise
-        except (GitError, OSError) as exc:
+                ) from None
             if working_directory is not None:
                 shutil.rmtree(working_directory, ignore_errors=True)
             # Redact the token from every string representation of the

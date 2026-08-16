@@ -93,10 +93,20 @@ class RepoLensFeaturesTests(unittest.TestCase):
     def test_api_key_auth_bypassed_when_key_unset(self) -> None:
         # API_KEY already absent (cleared in setUp)
 
-        # Requesting /indexes without API key header -> should be 200 (returns empty list)
+        # Requesting /indexes without API key header in dev -> should be 200 (returns empty list)
         res = self.client.get("/indexes")
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json(), [])
+
+    def test_api_key_auth_fails_fast_in_production_when_unset(self) -> None:
+        os.environ["ENVIRONMENT"] = "production"
+        os.environ.pop("API_KEY", None)
+
+        res = self.client.get("/indexes")
+        self.assertEqual(res.status_code, 500)
+        self.assertIn("API_KEY is not configured", res.json()["detail"])
+
+        os.environ.pop("ENVIRONMENT", None)
 
     def test_rate_limiting_trips_for_index_endpoint(self) -> None:
         api_deps.API_KEY = None

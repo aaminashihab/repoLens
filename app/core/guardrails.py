@@ -1,7 +1,9 @@
 """Guardrails and refusal validation logic for evidence-driven repository verification."""
 
+import collections
 import logging
 import re
+from typing import Any
 
 from app.models.verification import (
     EvidenceItem,
@@ -15,26 +17,97 @@ logger = logging.getLogger(__name__)
 _LINE_RANGE_RE = re.compile(r"^L(\d+)(?:-L(\d+))?$", re.IGNORECASE)
 
 
-def _is_valid_line_range(line_range: str) -> bool:
-    """Return True if *line_range* is a well-formed, logically consistent citation.
+def _parse_line_range(line_range: str) -> tuple[int, int] | None:
+    """Parse a line range string into a (start, end) 1-based tuple.
 
-    Validates:
-    - Parses as ``L<start>`` or ``L<start>-L<end>``
-    - Both values are positive integers
-    - start <= end (when a range is present)
-
-    An LLM could hallucinate ``L999-L1020`` for a 50-line file; this check
-    catches the most egregious format/logic errors before they reach the caller.
-    We intentionally do NOT check actual file line counts here (that would
-    require the chunk store), but format + ordering validation is already a
-    meaningful improvement over no validation.
+    Returns None if malformed, start < 1, or end < start.
     """
     m = _LINE_RANGE_RE.match(line_range.strip())
     if not m:
-        return False
+        return None
     start = int(m.group(1))
     end = int(m.group(2)) if m.group(2) is not None else start
-    return start >= 1 and end >= start
+    if start < 1 or end < start:
+        return None
+    return start, end
+
+
+def _is_valid_line_range(line_range: str) -> bool:
+    """Return True if *line_range* is a well-formed, logically consistent citation."""
+    return _parse_line_range(line_range) is not None
+
+
+def _normalize_text(text: str) -> str:
+    """Strip whitespace and lower-case text for robust substring matching."""
+    return re.sub(r"\s+", " ", text.strip().lower())
+
+
+def _is_citation_grounded_in_chunks(
+    item: EvidenceItem, file_chunks: list[Any]
+) -> bool:
+    """Verify that a cited EvidenceItem matches the actual retrieved code chunks for its file.
+
+    Validates:
+    1. Line range exists and parses correctly.
+    2. Cited [start, end] line range overlaps with at least one retrieved chunk's [start_line, end_line].
+       An LLM citing lines 999-1005 for a chunk spanning 10-30 will be rejected.
+    3. If the snippet is non-trivial (>= 8 chars and not generic ellipsis), verify it appears
+       in the chunk text or shares high normalized token overlap with the chunk.
+    """
+    parsed = _parse_line_range(item.line_range)
+    if parsed is None:
+        return False
+    cite_start, cite_end = parsed
+
+    # Find chunks for this file that overlap with the cited line range
+    overlapping_chunks = []
+    for chunk in file_chunks:
+        chunk_start = getattr(chunk, "start_line", 1)
+        chunk_end = getattr(chunk, "end_line", chunk_start)
+        # Check interval overlap: [cite_start, cite_end] overlaps [chunk_start, chunk_end]
+        if not (cite_end < chunk_start or cite_start > chunk_end):
+            overlapping_chunks.append(chunk)
+
+    if not overlapping_chunks:
+        logger.warning(
+            "Guardrail rejected citation with out-of-bounds line range for retrieved chunks",
+            extra={
+                "file_path": item.file_path,
+                "line_range": item.line_range,
+                "retrieved_chunk_ranges": [
+                    f"L{getattr(c, 'start_line', 1)}-L{getattr(c, 'end_line', 1)}"
+                    for c in file_chunks
+                ],
+            },
+        )
+        return False
+
+    # If snippet is non-trivial, check that it is grounded in at least one overlapping chunk
+    snippet = item.snippet.strip()
+    if len(snippet) >= 8 and snippet not in {"...", "/* ... */", "# ...", "pass"}:
+        norm_snippet = _normalize_text(snippet)
+        snippet_matched = False
+        for chunk in overlapping_chunks:
+            chunk_content = getattr(chunk, "text", getattr(chunk, "content", ""))
+            norm_chunk = _normalize_text(chunk_content)
+            if norm_snippet in norm_chunk:
+                snippet_matched = True
+                break
+            # Token-set overlap fallback if LLM edited snippet whitespace or indentation slightly
+            snippet_words = set(re.findall(r"\w+", norm_snippet))
+            chunk_words = set(re.findall(r"\w+", norm_chunk))
+            if snippet_words and len(snippet_words & chunk_words) / len(snippet_words) >= 0.70:
+                snippet_matched = True
+                break
+
+        if not snippet_matched:
+            logger.warning(
+                "Guardrail rejected citation with ungrounded/hallucinated snippet",
+                extra={"file_path": item.file_path, "snippet": snippet[:100]},
+            )
+            return False
+
+    return True
 
 
 class GuardrailValidationError(Exception):
@@ -51,17 +124,26 @@ class GuardrailValidator:
         report: VerificationReport,
         available_files: set[str],
         completeness_score: float = 1.0,
+        evidence_chunks: list[Any] | None = None,
     ) -> VerificationReport:
         """Validate report evidence against repository reality and apply refusal guardrails.
 
         Rules:
         1. If evidence completeness score < MIN_COMPLETENESS_THRESHOLD (70%), downgrade status to UNCERTAIN.
         2. Ensure all citations reference valid repository file paths.
-        3. Strip citations with malformed or logically impossible line ranges.
-        4. If status is LIKELY_TRUE but zero supporting evidence items are cited, refuse and mark UNCERTAIN.
+        3. Strip citations with malformed line ranges or ranges outside retrieved chunk bounds.
+        4. Strip citations with hallucinated/ungrounded code snippets.
+        5. If status is LIKELY_TRUE but zero supporting evidence items are cited, refuse and mark UNCERTAIN.
         """
         validated_supporting: list[EvidenceItem] = []
         validated_contradicting: list[EvidenceItem] = []
+
+        chunks_by_file: dict[str, list[Any]] = collections.defaultdict(list)
+        if evidence_chunks:
+            for chunk in evidence_chunks:
+                fpath = getattr(chunk, "file_path", None)
+                if fpath:
+                    chunks_by_file[fpath].append(chunk)
 
         for item in report.supporting_evidence:
             if item.file_path not in available_files and available_files:
@@ -76,6 +158,9 @@ class GuardrailValidator:
                     extra={"file_path": item.file_path, "line_range": item.line_range},
                 )
                 continue
+            if evidence_chunks and item.file_path in chunks_by_file:
+                if not _is_citation_grounded_in_chunks(item, chunks_by_file[item.file_path]):
+                    continue
             validated_supporting.append(item)
 
         for item in report.contradicting_evidence:
@@ -87,6 +172,9 @@ class GuardrailValidator:
                     extra={"file_path": item.file_path, "line_range": item.line_range},
                 )
                 continue
+            if evidence_chunks and item.file_path in chunks_by_file:
+                if not _is_citation_grounded_in_chunks(item, chunks_by_file[item.file_path]):
+                    continue
             validated_contradicting.append(item)
 
         # Rule 1: Refusal on low evidence completeness
@@ -127,4 +215,5 @@ class GuardrailValidator:
             missing_information=missing_info,
             recommended_tests=report.recommended_tests,
         )
+
 

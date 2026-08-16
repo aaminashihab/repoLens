@@ -113,6 +113,7 @@ class VerificationService:
             report=raw_report,
             available_files=available_files,
             completeness_score=completeness_score,
+            evidence_chunks=evidence_chunks,
         )
 
         logger.info(

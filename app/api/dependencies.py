@@ -29,6 +29,16 @@ async def require_api_key(x_api_key: str | None = Header(None, alias="X-API-Key"
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid or missing API key"
             )
+    else:
+        # In production environments (or when REQUIRE_API_KEY=true), missing API_KEY must fail fast
+        app_env = os.getenv("ENVIRONMENT", os.getenv("APP_ENV", "development")).lower()
+        require_key = os.getenv("REQUIRE_API_KEY", "false").lower() in ("true", "1", "yes")
+        if app_env in ("production", "prod") or require_key:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="API_KEY is not configured on the server in production environment."
+            )
+
 
 def get_clone_service() -> CloneService:
     return CloneService()

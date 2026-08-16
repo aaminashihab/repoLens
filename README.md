@@ -17,7 +17,7 @@ Instead of giving you an AI opinion, RepoLens finds the **most relevant lines of
 ---
 
 [![Live Demo](https://img.shields.io/badge/Live_Demo-repolens--x7b8.onrender.com-6366f1?style=for-the-badge)](https://repolens-x7b8.onrender.com/)
-[![Tests](https://img.shields.io/badge/Tests-94_Passing-22c55e?style=for-the-badge)](#testing--quality-assurance)
+[![Tests](https://img.shields.io/badge/Tests-99_Passing-22c55e?style=for-the-badge)](#testing--quality-assurance)
 [![Python](https://img.shields.io/badge/Python-3.10-3b82f6?style=for-the-badge&logo=python&logoColor=white)](#tech-stack)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](#tech-stack)
 [![CI](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/aaminashihab/repoLens/actions/workflows/ci.yml)
@@ -358,7 +358,7 @@ export PYTHONPATH=. && .venv/bin/pytest
 ```
 
 ```
-======================== 94 passed, 1 warning in 16.27s ========================
+======================== 99 passed, 1 warning in 9.85s ========================
 ```
 
 **The test suite covers:**
@@ -456,7 +456,7 @@ static/
 | **Vector Search** | FAISS CPU `IndexFlatL2` | Persistent `.faiss` + `.json` storage per index |
 | **LLM Reasoning** | OpenAI GPT-4o-mini / Gemini 2.5 Flash | Configurable via `.env` |
 | **Frontend** | TypeScript SPA | 0 `tsc` errors, DOMPurify XSS defense |
-| **Testing** | pytest | 94 passing tests |
+| **Testing** | pytest | 99 passing tests |
 | **CI** | GitHub Actions | Auto-runs on push & PR |
 
 ---
