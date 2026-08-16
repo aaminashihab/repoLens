@@ -14,7 +14,6 @@ import os
 import re
 import shutil
 import tempfile
-import threading
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
@@ -25,7 +24,7 @@ from urllib.parse import urlparse
 # attempt and must be rejected before it reaches the HTTP clone URL.
 _MAX_TOKEN_BYTES = 512
 
-from git import GitCommandError, GitError, Repo
+from git import GitError, Repo
 
 logger = logging.getLogger(__name__)
 
